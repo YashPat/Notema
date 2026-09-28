@@ -34,6 +34,7 @@ pub(crate) fn load_or_setup_with_path(path_override: Option<&Path>) -> AppResult
     // which must run it before probing for a lock.
     let (config, store, discovery) = if config_path.exists() {
         let config = config::load_config(&config_path)?;
+        ensure_debug_journal_isolated(&config.journal_root(&config_path))?;
         timing::mark("startup:config-load");
         let prepared = ish::prepare_store(&config_path, &config.journal_root(&config_path), true)?;
         timing::mark("startup:prepare-store");
@@ -62,6 +63,7 @@ pub(crate) fn load_existing(path_override: Option<&Path>) -> AppResult<Startup> 
     }
 
     let config = config::load_config(&config_path)?;
+    ensure_debug_journal_isolated(&config.journal_root(&config_path))?;
     timing::mark("startup:config-load");
     let store = ish::prepare_store(&config_path, &config.journal_root(&config_path), false)?.store;
     timing::mark("startup:prepare-store");
@@ -101,7 +103,7 @@ pub(crate) fn load_existing(path_override: Option<&Path>) -> AppResult<Startup> 
 /// override names the directory that holds `config.toml` alongside this device's
 /// encryption key; without one we fall back to the XDG default.
 fn config_path(path_override: Option<&Path>) -> AppResult<PathBuf> {
-    match path_override {
+    let path = match path_override {
         Some(dir) => {
             // `--config` names the directory, not the file. Passing a file (a
             // stale `.../config.toml`) would silently nest into
@@ -112,10 +114,31 @@ fn config_path(path_override: Option<&Path>) -> AppResult<PathBuf> {
                     dir.parent().unwrap_or(dir).display()
                 );
             }
-            Ok(dir.join("config.toml"))
+            dir.join("config.toml")
         }
-        None => config::default_config_path(),
+        None => config::default_config_path()?,
+    };
+    if config::debug_copy()
+        && path
+            .parent()
+            .is_some_and(|dir| Some(dir) == config::installed_config_dir().as_deref())
+    {
+        bail!(
+            "notema-dev will not use the installed config directory {}",
+            path.parent().unwrap_or(path.as_path()).display()
+        );
     }
+    Ok(path)
+}
+
+fn ensure_debug_journal_isolated(root: &Path) -> AppResult<()> {
+    if config::debug_copy() && Some(root) == config::installed_journal_root().as_deref() {
+        bail!(
+            "notema-dev will not use the installed journal root {}",
+            root.display()
+        );
+    }
+    Ok(())
 }
 
 /// Turn the typed journal-root answer into an absolute path. A relative answer
@@ -148,9 +171,16 @@ fn interactive_setup(config_path: &Path) -> AppResult<(Config, JournalStore)> {
     }
 
     let mut stdout = io::stdout();
-    let default_root = dirs::home_dir()
-        .map(|home| home.join("Journals"))
-        .unwrap_or_else(|| PathBuf::from("Journals"));
+    let default_root = if config::debug_copy() {
+        config_path
+            .parent()
+            .map(|dir| dir.join("journals"))
+            .unwrap_or_else(|| PathBuf::from("journals"))
+    } else {
+        dirs::home_dir()
+            .map(|home| home.join("Journals"))
+            .unwrap_or_else(|| PathBuf::from("Journals"))
+    };
 
     writeln!(stdout, "Notema first-run setup")?;
 
@@ -172,6 +202,7 @@ fn interactive_setup(config_path: &Path) -> AppResult<(Config, JournalStore)> {
         io::stdin().read_line(&mut root_input)?;
         resolve_setup_root(&root_input, default_root, &std::env::current_dir()?)
     };
+    ensure_debug_journal_isolated(&journal_root)?;
 
     let mut config = Config::new(journal_root);
 

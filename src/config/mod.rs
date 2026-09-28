@@ -391,10 +391,38 @@ impl Default for UiState {
     }
 }
 
+/// True when this process is the fork's debug binary. `cargo test` runs a
+/// harness whose file name is not `notema-dev`, so tests keep the installed paths.
+pub(crate) fn debug_copy() -> bool {
+    env::current_exe()
+        .ok()
+        .and_then(|path| path.file_name().map(|name| name.to_os_string()))
+        .is_some_and(|name| name == "notema-dev")
+}
+
+/// Config directory of the installed copy. The debug binary must not use it.
+pub(crate) fn installed_config_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        env::var_os("HOME")
+            .map(|home| PathBuf::from(home).join("Library/Application Support/de.paviro.notema"))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        dirs::home_dir().map(|home| home.join(".config").join("notema"))
+    }
+}
+
+/// Journal root the installed copy uses when `journal.path` is the documented default.
+pub(crate) fn installed_journal_root() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join("Journals"))
+}
+
 pub(crate) fn default_config_path() -> AppResult<PathBuf> {
-    // An explicit XDG_CONFIG_HOME always wins, on every platform. Per the XDG
-    // spec an empty value counts as unset, so fall through to the default.
-    if let Ok(config_home) = env::var("XDG_CONFIG_HOME")
+    // The debug binary never consults XDG_CONFIG_HOME: that variable is shared
+    // with the installed copy, and an empty value counts as unset anyway.
+    if !debug_copy()
+        && let Ok(config_home) = env::var("XDG_CONFIG_HOME")
         && !config_home.is_empty()
     {
         return Ok(PathBuf::from(config_home)
@@ -403,17 +431,28 @@ pub(crate) fn default_config_path() -> AppResult<PathBuf> {
     }
 
     // macOS keeps app data under Application Support; other Unixes use ~/.config,
-    // where the app name is already the namespace.
+    // where the app name is already the namespace. The debug binary uses a
+    // distinct directory so it cannot open the installed copy's files.
     #[cfg(target_os = "macos")]
     let dir = env::var_os("HOME")
         .map(PathBuf::from)
-        .map(|home| home.join("Library/Application Support/de.paviro.notema"))
+        .map(|home| {
+            let name = if debug_copy() {
+                "de.paviro.notema.dev"
+            } else {
+                "de.paviro.notema"
+            };
+            home.join("Library/Application Support").join(name)
+        })
         .context("HOME is not set")?;
     #[cfg(not(target_os = "macos"))]
-    let dir = dirs::home_dir()
-        .context("could not determine home directory")?
-        .join(".config")
-        .join("notema");
+    let dir = {
+        let name = if debug_copy() { "notema-dev" } else { "notema" };
+        dirs::home_dir()
+            .context("could not determine home directory")?
+            .join(".config")
+            .join(name)
+    };
     Ok(dir.join("config.toml"))
 }
 

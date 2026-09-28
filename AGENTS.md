@@ -1,3 +1,17 @@
+## Installed app (do not touch)
+
+This repo is a fork. A finished copy is already installed on this machine and is in daily use. Its data is real user data. The debug copy must not read it, write it, delete it, or symlink it.
+
+- Installed copy: `~/.local/bin/notema` (standalone binary, version 2026.8.0)
+- Live data: `~/Library/Application Support/de.paviro.notema` (config, device key, trust pins) and `~/Journals` (journal files, from `journal.path` in that config)
+- Path key: `NOTEMA_CONFIG` / `--config` selects the config directory (macOS default `~/Library/Application Support/de.paviro.notema`). `journal.path` inside that config selects the journal root. The keychain service and the location-helper directory are the bundle id `de.paviro.notema`.
+- Debug copy: `notema-dev` at `~/.local/bin/notema-dev` (wrapper) running `target/debug/notema-dev`
+- Debug data: `~/Library/Application Support/de.paviro.notema.dev` (config and `journals/`)
+- Isolation: the `notema-dev` executable name selects the `.dev` config directory, keychain service `de.paviro.notema.dev`, and location-helper directory. It refuses the installed config directory and `~/Journals`.
+- Do not install, link, or build a binary named `notema` over the installed copy. `target/debug/notema` still uses the installed paths; do not launch it.
+- Do not delete support files, preferences, containers, group containers, or keychain items (`brew uninstall --zap` included).
+- Cut over only when the user explicitly says so: quit, back up, then install a release build with the original name, bundle id, and data path, with the upstream updater off.
+
 # Agent Notes
 
 This is a terminal-first markdown journal app. Treat terminal readability as a core product requirement, not a polish pass.

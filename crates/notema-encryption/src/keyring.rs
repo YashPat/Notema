@@ -57,8 +57,19 @@ mod platform {
     use zeroize::Zeroizing;
 
     /// The service every item is filed under. Matches the macOS config
-    /// directory's bundle identifier.
-    const SERVICE: &str = "de.paviro.notema";
+    /// directory's bundle identifier. The debug binary uses a separate service
+    /// so it never reads or writes the installed copy's keychain items.
+    fn service() -> &'static str {
+        let debug = std::env::current_exe()
+            .ok()
+            .and_then(|path| path.file_name().map(|name| name.to_os_string()))
+            .is_some_and(|name| name == "notema-dev");
+        if debug {
+            "de.paviro.notema.dev"
+        } else {
+            "de.paviro.notema"
+        }
+    }
 
     /// Never written, so the probe read is expected to miss.
     const PROBE_ACCOUNT: &str = "availability-probe";
@@ -67,7 +78,7 @@ mod platform {
         // A read, because `Entry::new` defers OS contact and would answer `Ok`
         // with no keychain behind it. A miss returns before any unlock or ACL
         // check, so this cannot raise a dialog.
-        match keyring::Entry::new(SERVICE, PROBE_ACCOUNT).and_then(|entry| entry.get_secret()) {
+        match keyring::Entry::new(service(), PROBE_ACCOUNT).and_then(|entry| entry.get_secret()) {
             Ok(_) => true,
             Err(keyring::Error::NoEntry) => true,
             // A keychain is still there, and storing into it prompts to
@@ -98,7 +109,7 @@ mod platform {
     }
 
     fn entry(account: &str) -> Result<keyring::Entry> {
-        keyring::Entry::new(SERVICE, account).map_err(failed)
+        keyring::Entry::new(service(), account).map_err(failed)
     }
 
     /// A read that found nothing names the account; anything else is a failure.

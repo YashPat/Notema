@@ -124,9 +124,18 @@ fn ensure_helper() -> Result<PathBuf> {
 }
 
 fn support_dir() -> Result<PathBuf> {
+    let debug = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.file_name().map(|name| name.to_os_string()))
+        .is_some_and(|name| name == "notema-dev");
+    let name = if debug {
+        "de.paviro.notema.dev"
+    } else {
+        "de.paviro.notema"
+    };
     std::env::var_os("HOME")
         .map(PathBuf::from)
-        .map(|home| home.join("Library/Application Support/de.paviro.notema"))
+        .map(|home| home.join("Library/Application Support").join(name))
         .ok_or_else(|| ContextError::message("HOME is not set"))
 }
 
