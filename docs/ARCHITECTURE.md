@@ -39,7 +39,7 @@ The TUI lives inside the root crate:
 |---|---|---|
 | `notema-domain` | Entry values, validated coordinates, feelings, search value types, Markdown link parsing | Filesystem access, network access, terminal types |
 | `notema-analytics` | Pure aggregation over borrowed domain entries | I/O, clocks, rendering |
-| `notema-analyze` | The Analyze autofill decision | Filesystem access, network access, terminal types |
+| `notema-autofill` | The autofill decision | Filesystem access, network access, terminal types |
 | `notema-http` | The shared blocking HTTP agent, its timeouts, and iSH detection | URLs, payload shapes, retry policy |
 | `notema-timing` | Opt-in process timing behind `NOTEMA_TIMING` (`1` phase timings, `2` cache diagnostics): the level/origin/main-thread globals, stderr emission, the `defer` buffer holding output while the alternate screen is up, and Linux/Android `/proc` process-age probing | Anything the app branches on — it is write-only diagnostics |
 | `notema-context` | Geocoding, weather, air quality, celestial calculations, device location | Storage or TUI state |
@@ -63,7 +63,7 @@ crates that reach the network, and every request goes through `notema-http`,
 which owns the agent but decides nothing about what is fetched. Storage also
 opens a plain `TcpStream` to check whether a host is up before downloading from
 it, so an import full of links to a dead server fails fast. Every other crate —
-domain, analytics, analyze, encryption, import, fuse — must not open sockets.
+domain, analytics, autofill, encryption, import, fuse — must not open sockets.
 
 Errors follow the anyhow + thiserror split: the domain crates expose typed
 `thiserror` enums, the application uses `anyhow` at its edges (`bail!`,

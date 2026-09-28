@@ -2479,7 +2479,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "notema-analyze"
+name = "notema-autofill"
 version = "2026.8.0"
 dependencies = [
  "notema-domain",

@@ -1,4 +1,4 @@
-//! The Analyze autofill decision.
+//! The autofill decision.
 //!
 //! Given a model response and the entry's current fields, decide which empty
 //! fields to write and the outcome sentence. No I/O and no terminal types.
