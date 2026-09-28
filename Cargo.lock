@@ -2479,6 +2479,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "notema-analyze"
+version = "2026.8.0"
+dependencies = [
+ "notema-domain",
+]
+
+[[package]]
 name = "notema-context"
 version = "2026.8.0"
 dependencies = [
