@@ -447,9 +447,6 @@ fn panel_click_action(
                     render::MetadataChip::Activities => {
                         MetadataSearchTarget::Metadata(MetadataKind::Activities)
                     }
-                    render::MetadataChip::Tags => {
-                        MetadataSearchTarget::Metadata(MetadataKind::Tags)
-                    }
                 };
                 return Some(Action::Mouse(MouseAction::MetadataSearch { kind, value }));
             }
@@ -625,7 +622,6 @@ pub(super) fn apply_mouse_action(
             MetadataSearchTarget::Metadata(MetadataKind::Activities) => {
                 app.begin_activity_search(&value)
             }
-            MetadataSearchTarget::Metadata(MetadataKind::Tags) => app.begin_tag_search(&value),
         },
         MouseAction::ScrollPanel {
             panel,
@@ -1056,9 +1052,6 @@ pub(super) fn hint_id_to_action(app: &AppModel, id: render::HintId) -> Option<Ac
         render::HintId::CancelReaderHints => Some(Action::ReaderHint(ReaderHintAction::Cancel)),
         // The per-type metadata chips (and star) open their editor for the
         // selected entry, the same as the bare keys.
-        render::HintId::EditTags if app.can_act_on_selected_entry() => Some(Action::Metadata(
-            MetadataAction::BeginEdit(MetadataKind::Tags),
-        )),
         render::HintId::EditPeople if app.can_act_on_selected_entry() => Some(Action::Metadata(
             MetadataAction::BeginEdit(MetadataKind::People),
         )),

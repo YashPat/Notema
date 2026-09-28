@@ -28,14 +28,14 @@ fn the_search_field_colours_the_prefix_the_parser_recognised() {
     };
 
     assert_eq!(
-        field_cells_coloured(searching("tags:work"), keyword),
-        "tags:"
+        field_cells_coloured(searching("activities:work"), keyword),
+        "activities:"
     );
     // One `s` short of a filter, and nothing on screen says so today. This is
     // the case the colouring exists for.
     assert_eq!(field_cells_coloured(searching("tag:work"), keyword), "");
     // A theme with no syntax palette stays monochrome, like the code highlighter.
-    let mut plain = searching("tags:work");
+    let mut plain = searching("activities:work");
     plain.appearance.theme = theme::Theme::terminal_default();
     assert_eq!(field_cells_coloured(plain, keyword), "");
 }
@@ -53,7 +53,7 @@ fn search_field_row(theme: &theme::Theme, query: &str) -> String {
     })
     .into_iter()
     .find_map(|row| {
-        let start = row.find("tags:")?;
+        let start = row.find("activities:")?;
         let drawn = &row[start..];
         // The field pads to its width, so the query ends at the first run of two
         // spaces. A reversed pill's own trailing blank falls inside that run and
@@ -74,18 +74,30 @@ fn a_quoted_facet_value_draws_as_a_pill_in_every_pill_style() {
 
     // The buffer text is byte-for-byte the same in all three; only the two
     // delimiter cells differ, so the geometry cannot drift between them.
-    assert_eq!(search_field_row(&bracket, "tags:\"apple\""), "tags:[apple]");
-    assert_eq!(search_field_row(&bg, "tags:\"apple\""), "tags: apple");
-    assert_eq!(search_field_row(&reversed, "tags:\"apple\""), "tags: apple");
+    assert_eq!(
+        search_field_row(&bracket, "activities:\"apple\""),
+        "activities:[apple]"
+    );
+    assert_eq!(
+        search_field_row(&bg, "activities:\"apple\""),
+        "activities: apple"
+    );
+    assert_eq!(
+        search_field_row(&reversed, "activities:\"apple\""),
+        "activities: apple"
+    );
 
     // Two pills keep the operator between them visible.
     assert_eq!(
-        search_field_row(&bracket, "tags:\"apple\"+\"pear\""),
-        "tags:[apple]+[pear]"
+        search_field_row(&bracket, "activities:\"apple\"+\"pear\""),
+        "activities:[apple]+[pear]"
     );
     // Break one delimiter and the surviving quote reappears in the cell it
     // occupied — the failure explains itself.
-    assert_eq!(search_field_row(&bracket, "tags:\"apple"), "tags:\"apple");
+    assert_eq!(
+        search_field_row(&bracket, "activities:\"apple"),
+        "activities:\"apple"
+    );
 }
 
 /// The caret arithmetic is untouched only because a chip occupies exactly the
@@ -96,8 +108,12 @@ fn a_pill_occupies_the_same_columns_as_the_quotes_it_replaces() {
     let plain = theme::test_theme_from_toml("[metadata.pills]\nstyle = \"bracket\"");
     // `location:` gets no pill, so its quotes render literally — same width.
     assert_eq!(
-        search_field_row(&bracket, "tags:\"apple\"").chars().count(),
-        search_field_row(&plain, "tags:apple\"\"").chars().count()
+        search_field_row(&bracket, "activities:\"apple\"")
+            .chars()
+            .count(),
+        search_field_row(&plain, "activities:apple\"\"")
+            .chars()
+            .count()
     );
 }
 
@@ -115,7 +131,7 @@ fn the_suggestion_list_draws_under_the_query_field() {
             std::fs::write(
                 dir.join(format!("{name}.md")),
                 format!(
-                    "+++\nschema_version = 1\n\n[entry]\ntags = [{tags}]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\nbody\n"
+                    "+++\nschema_version = 1\n\n[entry]\nactivities = [{tags}]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\nbody\n"
                 ),
             )
             .unwrap();
@@ -128,7 +144,7 @@ fn the_suggestion_list_draws_under_the_query_field() {
         render_to_rows(120, 24, |frame| draw_app(frame, app, &mut view)).join("\n")
     };
 
-    for ch in "tags:".chars() {
+    for ch in "activities:".chars() {
         app.search_input_key(crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Char(ch),
             crossterm::event::KeyModifiers::NONE,
@@ -174,7 +190,7 @@ mod suggestion_popup_tests {
     const SCREEN: (u16, u16) = (120, 30);
 
     /// A library whose entries carry `count` distinct tags all starting `a`, so
-    /// typing `tags:a` offers exactly that many values.
+    /// typing `activities:a` offers exactly that many values.
     fn app_offering(count: usize, active_theme: theme::Theme) -> AppModel {
         use crate::tui::test_support::app_in_temp;
 
@@ -185,7 +201,7 @@ mod suggestion_popup_tests {
                 std::fs::write(
                     dir.join(format!("e{index}.md")),
                     format!(
-                        "+++\nschema_version = 1\n\n[entry]\ntags = [\"a{index:02}\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\nbody\n"
+                        "+++\nschema_version = 1\n\n[entry]\nactivities = [\"a{index:02}\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\nbody\n"
                     ),
                 )
                 .unwrap();
@@ -193,7 +209,7 @@ mod suggestion_popup_tests {
         });
         app.appearance.theme = active_theme;
         app.begin_search();
-        for ch in "tags:a".chars() {
+        for ch in "activities:a".chars() {
             app.search_input_key(crossterm::event::KeyEvent::new(
                 crossterm::event::KeyCode::Char(ch),
                 crossterm::event::KeyModifiers::NONE,

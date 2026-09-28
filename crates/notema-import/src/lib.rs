@@ -227,7 +227,6 @@ pub fn parse_dayone(json_path: &Path) -> Result<ImportBatch, ImportError> {
             .collect();
 
         let metadata = Metadata {
-            tags: entry.tags.clone(),
             activities,
             starred: entry.starred,
             ..Metadata::default()

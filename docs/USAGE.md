@@ -18,7 +18,6 @@ on macOS), overridable with `$XDG_CONFIG_HOME` or `--config <DIR>`.
 ```bash
 notema log "Shipped the release" \
   --journal work \
-  --tag project,milestone \
   --person Alice --activity coding \
   --feeling proud,focused \
   --mood 3 \
@@ -40,7 +39,7 @@ it.
 entry matches. A `prefix:` narrows it to one field:
 
 ```
-tags:project        people:Alice        activities:coding
+people:Alice        activities:coding
 feelings:proud      location:Berlin     mood:3            star:true
 ```
 
@@ -65,36 +64,36 @@ date:2026-*-25      the 25th of every month in 2026
 Because an open component recurs, it has no single span for `before:`/`after:` to
 compare against — those two take a fixed date.
 
-Chain filters with `;` to require all of them. `tags:`, `people:`, `activities:`,
+Chain filters with `;` to require all of them. `people:`, `activities:`,
 and `feelings:` take several values: `+` requires all of them and `|` accepts any.
 `+` binds looser, so `a+b|c` means a and (b or c):
 
 ```
-tags:work+urgent; people:alice     both tags, and Alice
-tags:berlin|paris                  either tag
-after:2025-01; before:2025-06      a bounded range
-beach; tags:travel                 full-text "beach" and the travel tag
+people:alice+bob; activities:coding     both people, and coding
+activities:berlin|paris                 either activity
+after:2025-01; before:2025-06           a bounded range
+beach; activities:travel                full-text "beach" and the travel activity
 ```
 
 A prefix-less piece is a full-text search AND-ed with the filters, so it also
 supplies the ranking. Only `;`, `+`, and `|` are structural, and only where the
 prefix takes them — values keep everything else (`location:Berlin, Germany`).
 
-`tags:`, `people:`, `activities:` and `feelings:` match a bare value anywhere in
+`people:`, `activities:` and `feelings:` match a bare value anywhere in
 the field, which is what keeps the list narrowing as you type. Quote it to mean
 that value and nothing else, and to carry a `;`, `+`, or `|` literally:
 
 ```
-tags:app            app, apple, and pineapple
-tags:"app"          the tag app
-tags:"C++"          the tag C++, not "C" and "+"
-tags:"Berlin; Mitte"
-tags:"say ""hi"""   a quote inside a quoted value is written twice
+activities:app            app, apple, and pineapple
+activities:"app"          the activity app
+activities:"C++"          the activity C++, not "C" and "+"
+activities:"Berlin; Mitte"
+activities:"say ""hi"""   a quote inside a quoted value is written twice
 ```
 
 The pair is what makes a value exact, so an opening quote on its own is still the
-value you are typing: `tags:"app` finds the same entries `tags:app` does, and the
-closing quote narrows them to the one tag.
+value you are typing: `activities:"app` finds the same entries `activities:app` does, and the
+closing quote narrows them to the one activity.
 
 `location:` is not exact either way: a place contains the places around it, so
 `location:Germany` finds every entry in it. It takes `|` but not `+` — an entry
@@ -106,7 +105,7 @@ location:Berlin|Paris     entries in either city
 location:Rock + Roll      the place "Rock + Roll"
 ```
 
-Searches launched by clicking a tag, person, feeling, or a filter-browser row
+Searches launched by clicking a person, feeling, or a filter-browser row
 (`b`) quote themselves, so the query they drop in the search box means the value
 you clicked and only that one. A launched `location:` does not — quoting would
 not narrow it — so it arrives as plain text (`location:Berlin, Germany`), quoted

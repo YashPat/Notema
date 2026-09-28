@@ -204,7 +204,7 @@ impl AppModel {
     /// leaving the caret directly after it.
     ///
     /// No trailing space: a space does not separate filters, `;` does, so
-    /// `tags:"apple" foo` would be one filter whose value is `"apple" foo`. The
+    /// `activities:"apple" foo` would be one filter whose value is `"apple" foo`. The
     /// user types the `+`, `|` or `;`, and each of those opens the list again.
     pub(crate) fn commit_suggestion(&mut self, index: usize) {
         let query = self.search.query.as_str();
@@ -219,7 +219,7 @@ impl AppModel {
         };
 
         // An empty value is a caret sitting in whitespace, and writing beside it
-        // would leave the space behind: `tags: ` completes to `tags:"apple"`.
+        // would leave the space behind: `activities: ` completes to `activities:"apple"`.
         let replaced = if caret.value.is_empty() {
             caret.span
         } else {
@@ -299,7 +299,7 @@ mod tests {
                 fs::write(
                     dir.join(format!("{name}.md")),
                     format!(
-                        "+++\nschema_version = 1\n\n[entry]\ntags = [{tags}]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n\n[location]\ncity = \"{city}\"\ncountry = \"Germany\"\n+++\n\nbody\n"
+                        "+++\nschema_version = 1\n\n[entry]\nactivities = [{tags}]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n\n[location]\ncity = \"{city}\"\ncountry = \"Germany\"\n+++\n\nbody\n"
                     ),
                 )
                 .unwrap();
@@ -328,13 +328,13 @@ mod tests {
     #[test]
     fn a_finished_prefix_offers_its_whole_vocabulary_then_narrows() {
         let mut app = fixture();
-        type_query(&mut app, "tags:");
+        type_query(&mut app, "activities:");
         // Ranked count-first, like the browser's rows: `apple` is on both entries.
         assert_eq!(labels(&app), vec!["apple", "App", "pear"]);
         assert!(app.suggestions_open());
 
         type_query(&mut app, "app");
-        // Case-insensitive substring — the same reading `tags:app` already has.
+        // Case-insensitive substring — the same reading `activities:app` already has.
         assert_eq!(labels(&app), vec!["apple", "App"]);
 
         // Nothing highlighted until the list is arrowed into, so `Enter` is still
@@ -348,23 +348,23 @@ mod tests {
     #[test]
     fn a_space_after_the_prefix_keeps_the_whole_vocabulary_on_offer() {
         let mut app = fixture();
-        type_query(&mut app, "tags: ");
+        type_query(&mut app, "activities: ");
         assert_eq!(labels(&app), vec!["apple", "App", "pear"]);
         assert!(app.suggestions_open());
 
         app.commit_first_suggestion();
-        assert_eq!(app.search.query.as_str(), "tags:\"apple\"");
+        assert_eq!(app.search.query.as_str(), "activities:\"apple\"");
     }
 
     #[test]
     fn a_committed_value_is_quoted_and_the_caret_lands_after_it() {
         let mut app = fixture();
-        type_query(&mut app, "tags:app");
+        type_query(&mut app, "activities:app");
         app.move_suggestion_highlight(1);
         app.commit_first_suggestion();
 
-        assert_eq!(app.search.query.as_str(), "tags:\"apple\"");
-        assert_eq!(app.search.query.cursor_byte(), 12);
+        assert_eq!(app.search.query.as_str(), "activities:\"apple\"");
+        assert_eq!(app.search.query.cursor_byte(), 18);
         // Finished: the list goes down rather than offering the value again.
         assert!(!app.suggestions_open());
 
@@ -413,7 +413,7 @@ mod tests {
     #[test]
     fn tab_after_a_dismissal_commits_the_first_row_not_the_armed_one() {
         let mut app = fixture();
-        type_query(&mut app, "tags:app");
+        type_query(&mut app, "activities:app");
         app.move_suggestion_highlight(1);
         app.move_suggestion_highlight(1);
         assert_eq!(app.search.suggestions.selected_index(), Some(1));
@@ -421,7 +421,7 @@ mod tests {
         app.dismiss_suggestions();
         app.commit_first_suggestion();
 
-        assert_eq!(app.search.query.as_str(), "tags:\"apple\"");
+        assert_eq!(app.search.query.as_str(), "activities:\"apple\"");
     }
 
     /// An opening quote with no partner is a fragment like any other. Offering
@@ -429,14 +429,14 @@ mod tests {
     #[test]
     fn a_half_typed_chip_still_offers_its_value() {
         let mut app = fixture();
-        type_query(&mut app, "tags:\"app");
+        type_query(&mut app, "activities:\"app");
         assert_eq!(labels(&app), vec!["apple", "App"]);
         // And the results underneath are narrowing on the same fragment: a list
         // offering `apple` over an empty result list was two readings of one
         // value.
         assert_eq!(app.search_results().len(), 2);
         app.commit_first_suggestion();
-        assert_eq!(app.search.query.as_str(), "tags:\"apple\"");
+        assert_eq!(app.search.query.as_str(), "activities:\"apple\"");
     }
 
     /// Esc has to survive the next keystroke, or it would undo itself while the
@@ -444,7 +444,7 @@ mod tests {
     #[test]
     fn dismissing_outlasts_typing_but_not_the_next_filter() {
         let mut app = fixture();
-        type_query(&mut app, "tags:app");
+        type_query(&mut app, "activities:app");
         app.dismiss_suggestions();
         assert!(!app.suggestions_open());
 
@@ -456,7 +456,7 @@ mod tests {
         // The rows are still built, so `Tab` has something to complete.
         assert_eq!(labels(&app), vec!["apple"]);
 
-        type_query(&mut app, "; tags:");
+        type_query(&mut app, "; activities:");
         assert!(app.suggestions_open(), "a new filter starts undismissed");
     }
 }

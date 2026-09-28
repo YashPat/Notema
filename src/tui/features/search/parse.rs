@@ -9,7 +9,6 @@ use notema_domain::DateBound;
 /// A filter prefix the query grammar recognises.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Prefix {
-    Tags,
     People,
     Activities,
     Feelings,
@@ -23,8 +22,7 @@ pub(crate) enum Prefix {
 /// to a predicate and what the query field highlights as a prefix cannot drift:
 /// a token the highlighter colours but the parser drops to full text would be
 /// worse than no highlighting at all.
-const PREFIXES: [(&str, Prefix); 10] = [
-    ("tags:", Prefix::Tags),
+const PREFIXES: [(&str, Prefix); 9] = [
     ("people:", Prefix::People),
     ("activities:", Prefix::Activities),
     ("feelings:", Prefix::Feelings),
@@ -78,7 +76,7 @@ impl Prefix {
     /// whole value as a date, a score or a flag.
     pub(super) fn value_grammar(self) -> ValueGrammar {
         match self {
-            Self::Tags | Self::People | Self::Activities | Self::Feelings => ValueGrammar::Groups,
+            Self::People | Self::Activities | Self::Feelings => ValueGrammar::Groups,
             Self::Location => ValueGrammar::Alternatives,
             Self::Star | Self::Mood | Self::Date(_) => ValueGrammar::Whole,
         }
@@ -288,7 +286,10 @@ mod tests {
 
     #[test]
     fn a_prefix_is_matched_byte_exactly() {
-        assert_eq!(split_prefix("tags:work"), Some((Prefix::Tags, "work")));
+        assert_eq!(
+            split_prefix("activities:work"),
+            Some((Prefix::Activities, "work"))
+        );
         assert_eq!(
             split_prefix("before:2026"),
             Some((Prefix::Date(DateBound::Before), "2026"))
@@ -299,8 +300,8 @@ mod tests {
         assert_eq!(split_prefix("tag:work"), None);
         // The value is handed over raw; trimming and unquoting are the caller's.
         assert_eq!(
-            split_prefix("tags: \"a\" "),
-            Some((Prefix::Tags, " \"a\" "))
+            split_prefix("activities: \"a\" "),
+            Some((Prefix::Activities, " \"a\" "))
         );
     }
 
@@ -310,11 +311,7 @@ mod tests {
     /// `from_prefix`, which is how the search box knows whose values to offer.
     #[test]
     fn every_produced_prefix_parses_back() {
-        for kind in [
-            MetadataKind::Tags,
-            MetadataKind::People,
-            MetadataKind::Activities,
-        ] {
+        for kind in [MetadataKind::People, MetadataKind::Activities] {
             let segment = format!("{}x", kind.search_prefix());
             assert!(
                 split_prefix(&segment).is_some(),

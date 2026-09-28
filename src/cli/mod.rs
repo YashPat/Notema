@@ -274,9 +274,6 @@ struct LogArgs {
     #[arg(long, value_name = "NAME")]
     journal: Option<String>,
 
-    #[arg(long, value_name = "TAG")]
-    tag: Vec<String>,
-
     #[arg(long, value_name = "NAME")]
     person: Vec<String>,
 

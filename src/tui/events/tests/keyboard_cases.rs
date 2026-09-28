@@ -695,9 +695,9 @@ fn typed_hint_ids_route_to_actions_without_string_parsing() {
     app.nav.focus = Focus::Entries;
 
     assert_eq!(
-        mouse::hint_id_to_action(&app, render::HintId::EditTags),
+        mouse::hint_id_to_action(&app, render::HintId::EditPeople),
         Some(Action::Metadata(MetadataAction::BeginEdit(
-            crate::tui::state::MetadataKind::Tags,
+            crate::tui::state::MetadataKind::People,
         )))
     );
     assert_eq!(
@@ -719,7 +719,7 @@ fn typed_hint_ids_route_to_actions_without_string_parsing() {
         None
     );
 
-    app.begin_edit_tags();
+    app.begin_edit_people();
     if let Some(state) = app.edit_metadata_state_mut() {
         state.all_values.push(("work".to_string(), 1));
         state.filtered.push(0);
@@ -755,7 +755,7 @@ fn typed_hint_ids_route_to_actions_without_string_parsing() {
 #[test]
 fn enter_in_metadata_input_saves_when_input_is_empty() {
     let mut app = app_with_entries(1);
-    app.begin_edit_tags();
+    app.begin_edit_people();
     let state = app.edit_metadata_state_mut().unwrap();
     state.focus = EditMetadataFocus::Input;
     state.input.clear();
@@ -783,7 +783,7 @@ fn enter_in_metadata_input_saves_when_input_is_empty() {
 #[test]
 fn arrows_in_metadata_input_move_the_caret_for_mid_string_edits() {
     let mut app = app_with_entries(1);
-    app.begin_edit_tags();
+    app.begin_edit_people();
     let state = app.edit_metadata_state_mut().unwrap();
     state.focus = EditMetadataFocus::Input;
     state.input = "rst".into();
@@ -946,7 +946,7 @@ fn the_suggestion_list_claims_no_key_until_it_is_arrowed_into() {
 #[test]
 fn tab_commits_a_suggestion_for_every_facet() {
     for (typed, expected) in [
-        ("tags:apr", "tags:\"apricot\""),
+        ("people:apr", "people:\"apricot\""),
         ("location:berl", "location:Berlin, Germany"),
     ] {
         let mut app = crate::tui::test_support::app_in_temp(|root| {
@@ -954,7 +954,7 @@ fn tab_commits_a_suggestion_for_every_facet() {
             fs::create_dir_all(&dir).unwrap();
             fs::write(
                 dir.join("a.md"),
-                "+++\nschema_version = 1\n\n[entry]\ntags = [\"apricot\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n\n[location]\ncity = \"Berlin\"\ncountry = \"Germany\"\n+++\n\nbody\n",
+                "+++\nschema_version = 1\n\n[entry]\npeople = [\"apricot\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n\n[location]\ncity = \"Berlin\"\ncountry = \"Germany\"\n+++\n\nbody\n",
             )
             .unwrap();
         });

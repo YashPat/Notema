@@ -828,6 +828,42 @@ fn rotate_identity_replaces_the_key_and_keeps_reading() {
     );
 }
 
+#[test]
+fn load_strips_tags_from_an_encrypted_entry_and_it_still_decrypts() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = store_at(dir.path());
+    store.ensure().unwrap();
+    store
+        .initialize_encryption("laptop", Some(&pw("pw")))
+        .unwrap();
+    store.unlock(Some(&pw("pw"))).unwrap();
+    store.create_journal("diary").unwrap();
+    let path = create_entry(&store, "diary", "secret body");
+
+    let edited = b"+++\nschema_version = 1\n\n# kept\n[entry]\ntags = [\"secret\"]\nfeelings = [\"calm\"]\n+++\n\nsecret body\n";
+    store
+        .write_store_file(&path, notema_storage::StoreFileEncoding::Encrypted, edited)
+        .unwrap();
+
+    store
+        .load_library(notema_storage::CachePolicy::Normal)
+        .unwrap();
+    let plain = store
+        .read_store_file(&path, notema_storage::StoreFileEncoding::Encrypted)
+        .unwrap();
+    let text = String::from_utf8(plain).unwrap();
+    assert!(!text.contains("tags"));
+    assert!(text.contains("# kept"));
+    assert!(text.contains("feelings = [\"calm\"]"));
+    assert!(text.contains("secret body"));
+
+    let cipher = std::fs::read(&path).unwrap();
+    store
+        .load_library(notema_storage::CachePolicy::Normal)
+        .unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), cipher);
+}
+
 /// The byte-level encrypted store-file API the FUSE mount is built on:
 /// rewriting an entry re-encrypts it verbatim (byte-for-byte round-trip), the
 /// file stays encrypted on disk, and an encrypted asset written alongside it

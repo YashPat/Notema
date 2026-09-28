@@ -96,7 +96,6 @@ body.
 schema_version = 1
 
 [entry]
-tags = ["work", "release"]
 feelings = ["focused", "proud"]
 people = ["Alice"]
 activities = ["coding"]
@@ -185,7 +184,7 @@ app-captured context. Empty fields (and empty tables) are omitted.
 | Key | Type | Meaning |
 |---|---|---|
 | `schema_version` | int | Required; `1`. |
-| `[entry]` | table | Your own metadata: `tags`/`people`/`activities` (free-form string[]), `feelings` (string[], fixed vocabulary below; unknown values dropped on read), `mood` (int clamped to `-5..=5`; invalid becomes "no mood"), `starred` (bool, omitted when false). |
+| `[entry]` | table | Your own metadata: `people`/`activities` (free-form string[]), `feelings` (string[], fixed vocabulary below; unknown values dropped on read), `mood` (int clamped to `-5..=5`; invalid becomes "no mood"), `starred` (bool, omitted when false). A load deletes a `tags` key and leaves the rest of the file alone. |
 | `[time]` | table | `created_at`, `edited_at` (RFC 3339; `edited_at` moves only on real body/metadata edits, not on re-encryption), `timezone` (IANA zone name), `writing_seconds` (accumulated editor-open time). |
 | `[location]` | table | OpenStreetMap / Nominatim address keys (`name`, `road`, `city`, `state`, `country`, …) plus `latitude`, `longitude`. A device GPS grab also sets `accuracy_m` and `source`. Displayed, not searched. |
 | `[weather]` | table | Captured from Open-Meteo when a location is set: `condition`, temperatures, `humidity`, `pressure_mb`, wind, precipitation, `source`. Capture-only. |

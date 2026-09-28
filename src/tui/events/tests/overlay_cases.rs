@@ -17,7 +17,7 @@ fn comma_opens_settings_in_browse_but_not_over_dialogs() {
     );
 
     // With a dialog open the key belongs to that overlay, not settings.
-    app.begin_edit_tags();
+    app.begin_edit_people();
     assert_ne!(
         keyboard::key_to_action(&app, key(KeyCode::Char(',')), true),
         Some(Action::Settings(SettingsAction::OpenSettings))
@@ -895,8 +895,7 @@ fn metadata_menu_click_maps_every_row_to_its_action() {
     assert!(matches!(app.overlay, Overlay::MetadataMenu));
     let area = Rect::new(0, 0, 80, 24);
 
-    let expected: [Action; 6] = [
-        Action::Metadata(MetadataAction::BeginEdit(MetadataKind::Tags)),
+    let expected: [Action; 5] = [
         Action::Metadata(MetadataAction::BeginEdit(MetadataKind::People)),
         Action::Metadata(MetadataAction::BeginEdit(MetadataKind::Activities)),
         Action::Metadata(MetadataAction::BeginFeelings),
@@ -938,9 +937,9 @@ fn metadata_menu_closes_on_esc_or_valid_key_only() {
         Some(Action::Overlay(OverlayAction::Cancel))
     );
     assert_eq!(
-        keyboard::key_to_action(&app, key(KeyCode::Char('t')), true),
+        keyboard::key_to_action(&app, key(KeyCode::Char('p')), true),
         Some(Action::Metadata(MetadataAction::BeginEdit(
-            MetadataKind::Tags
+            MetadataKind::People
         )))
     );
     // An unmapped key is inert — the popup stays open.
@@ -994,7 +993,7 @@ fn editor_metadata_menu_click_maps_rows_and_close() {
     assert_eq!(
         row_action,
         Some(Action::Metadata(MetadataAction::BeginEdit(
-            MetadataKind::Tags
+            MetadataKind::People
         )))
     );
 
@@ -1055,7 +1054,7 @@ fn hovering_a_toast_targets_it_over_everything() {
 #[test]
 fn dialog_list_hover_targets_rows_without_selecting() {
     let mut app = app_with_entries(1);
-    app.begin_edit_tags();
+    app.begin_edit_people();
     set_tag_dialog_items(&mut app, 5);
     let area = Rect::new(0, 0, 120, 20);
     let layout = render::metadata_dialog_layout(&app.appearance.theme, area, 5);

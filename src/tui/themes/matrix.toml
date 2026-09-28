@@ -94,7 +94,6 @@ style      = "bg"
 feelings   = { fg = { dark = "#00993d", light = "#074f22" }, bg = { dark = "#00260f", light = "#c9e8d5" } }
 people     = { fg = { dark = "#00be4c", light = "#095f29" }, bg = { dark = "#002e12", light = "#cfebd9" } }
 activities = { fg = { dark = "#00dd58", light = "#0a6f30" }, bg = { dark = "#003616", light = "#d5eedd" } }
-tags       = { fg = { dark = "#00ff66", light = "#0b7f37" }, bg = { dark = "#003e19", light = "#dbf1e1" } }
 
 [metadata.glyphs]
 separator = "*"

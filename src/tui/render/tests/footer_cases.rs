@@ -24,7 +24,7 @@ fn entries_footer_includes_entry_actions_when_an_entry_is_selected() {
     // The direct entry-action chips are present; view is gone (clicking the row
     // already opens it).
     assert!(text.contains("e  edit"));
-    assert!(text.contains("t  tags"));
+    assert!(text.contains("p  people"));
     assert!(text.contains("p  people"));
     assert!(text.contains("s  star"));
     assert!(text.contains("d  del"));
@@ -52,7 +52,7 @@ fn entries_and_reader_share_the_entry_actions_but_only_entries_shows_the_index()
     let reader = footer_text(&app, 200);
 
     // Both render `focused_entry_footer`, so the shared entry actions cannot drift.
-    for label in ["e  edit", "t  tags", "s  star", "d  del"] {
+    for label in ["e  edit", "p  people", "s  star", "d  del"] {
         assert!(entries.contains(label), "entries missing {label}");
         assert!(reader.contains(label), "reader missing {label}");
     }
@@ -74,7 +74,7 @@ fn reader_footer_drops_the_close_chip_and_global_tail() {
     // matches the inline reader by construction — no separate expanded footer.
     let text = footer_text(&app, 200);
 
-    for label in ["e  edit", "t  tags", "s  star", "d  del"] {
+    for label in ["e  edit", "p  people", "s  star", "d  del"] {
         assert!(text.contains(label), "missing {label}");
     }
     // No close chip, no global tail. Enter/Esc/← still collapse full screen by key;
@@ -165,13 +165,13 @@ fn wrapped_footer_hint_routing_uses_visible_row() {
     let (row_index, line) = text
         .split('\n')
         .enumerate()
-        .find(|(_, line)| line.contains("t  tags"))
+        .find(|(_, line)| line.contains("p  people"))
         .expect("metadata hint present");
-    let col = line.find("t  tags").unwrap() as u16;
+    let col = line.find("p  people").unwrap() as u16;
 
     assert_eq!(
         footer_hint_id_at_point(&app, 0, origin_y, width, col, origin_y + row_index as u16),
-        Some(HintId::EditTags)
+        Some(HintId::EditPeople)
     );
 }
 
@@ -182,8 +182,8 @@ fn footer_hint_routing_uses_typed_ids() {
     let text = footer_text(&app, 200);
 
     assert_eq!(
-        footer_hint_id_at(&app, 0, 200, text.find("t  tags").unwrap() as u16),
-        Some(HintId::EditTags)
+        footer_hint_id_at(&app, 0, 200, text.find("p  people").unwrap() as u16),
+        Some(HintId::EditPeople)
     );
     assert_eq!(
         footer_hint_id_at(&app, 0, 200, text.find("e  edit").unwrap() as u16),
@@ -233,13 +233,13 @@ fn fullscreen_reader_footer_routes_via_the_shared_hit_test() {
     let (row_index, line) = text
         .split('\n')
         .enumerate()
-        .find(|(_, line)| line.contains("t  tags"))
+        .find(|(_, line)| line.contains("p  people"))
         .expect("metadata hint present");
-    let col = line.find("t  tags").unwrap() as u16;
+    let col = line.find("p  people").unwrap() as u16;
 
     assert_eq!(
         footer_hint_id_at_point(&app, 0, origin_y, width, col, origin_y + row_index as u16),
-        Some(HintId::EditTags)
+        Some(HintId::EditPeople)
     );
 }
 

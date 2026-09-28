@@ -148,7 +148,6 @@ const HELP_SECTIONS: [(&str, &[(&str, &str)]); 6] = [
     (
         "Metadata",
         &[
-            ("t", "Tags"),
             ("p", "People"),
             ("a", "Activities"),
             ("f", "Feelings"),
@@ -181,7 +180,6 @@ const SEARCH_SECTIONS: [(&str, &[(&str, &str)]); 5] = [
     (
         "Filters",
         &[
-            ("tags:", "Tag contains…"),
             ("people:", "Person contains…"),
             ("activities:", "Activity contains…"),
             ("feelings:", "Feeling or alias contains…"),
@@ -215,14 +213,14 @@ const SEARCH_SECTIONS: [(&str, &[(&str, &str)]); 5] = [
     (
         "Combine",
         &[
-            ("tags:x; people:y", "Every filter matches"),
-            ("tags:x+y", "All values match"),
-            ("tags:x|y", "Any value matches"),
-            ("tags:x+y|z", "x and (y or z)"),
+            ("people:x; activities:y", "Every filter matches"),
+            ("people:x+y", "All values match"),
+            ("people:x|y", "Any value matches"),
+            ("people:x+y|z", "x and (y or z)"),
             ("location:x|y", "Either place, no +"),
-            ("beach; tags:x", "Text plus filters"),
-            ("tags:\"x\"", "Exactly x, not xy"),
-            ("tags:\"x+y\"", "Exact, operators literal"),
+            ("beach; people:x", "Text plus filters"),
+            ("people:\"x\"", "Exactly x, not xy"),
+            ("people:\"x+y\"", "Exact, operators literal"),
         ],
     ),
     ("Notes", &[("no prefix", "Full-text search")]),

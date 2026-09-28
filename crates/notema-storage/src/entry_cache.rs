@@ -18,8 +18,9 @@ use std::{
     time::Instant,
 };
 
-/// Version 2 drops `ctime` from the stamp: length plus mtime on every platform.
-const CACHE_WIRE_VERSION: u32 = 2;
+/// Version 3 forces a rebuild so the load that drops entry `tags` actually
+/// opens each file. Length plus mtime, on every platform, since version 2.
+const CACHE_WIRE_VERSION: u32 = 3;
 const PLAIN_CACHE_FILE: &str = "library-cache.msgpack";
 const ENCRYPTED_CACHE_FILE: &str = "library-cache.msgpack.age";
 
@@ -308,11 +309,24 @@ pub(super) fn validate_discovery(
             });
         }
     };
-    let (source_entries, source_failures) = storage::read_entries_with_progress(
+    let (source_entries, source_failures, stamp_updates) = storage::read_entries_with_progress(
         misses,
         identity,
+        Some(&paths.keys),
         progress.map(|_| &report_miss as &(dyn Fn(usize, usize) + Sync)),
     )?;
+    for update in stamp_updates {
+        match update.effect {
+            storage::StampEffect::Refresh { stamp, trusted } => {
+                stamps.insert(update.path, (stamp, trusted));
+            }
+            storage::StampEffect::Untrust => {
+                if let Some((_, trusted)) = stamps.get_mut(&update.path) {
+                    *trusted = false;
+                }
+            }
+        }
+    }
     entries.extend(source_entries);
     entries.sort_by(|left, right| right.path.cmp(&left.path));
     let source_read = source_started.elapsed();
@@ -1094,5 +1108,53 @@ mod tests {
             .mode()
             & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn load_strips_tags_and_leaves_the_rest_of_the_file() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().join("journals");
+        let store = store_with_entries(&root, &dir.path().join("config"), &[]);
+        let path = root.join("daily/2026-07-13-tagged.md");
+        let original = "\
++++\n\
+schema_version = 1\n\
+\n\
+# kept\n\
+[entry]\n\
+feelings = [\"calm\"]\n\
+tags = [\"work\"]\n\
+\n\
+[time]\n\
+edited_at = \"2026-07-01T10:00:00+02:00\"\n\
++++\n\
+\n\
+Body stays.\n\
+";
+        fs::write(&path, original).unwrap();
+
+        store.load_library(CachePolicy::Normal).unwrap();
+        let once = fs::read_to_string(&path).unwrap();
+        assert!(!once.contains("tags"));
+        assert!(once.contains("# kept"));
+        assert!(once.contains("feelings = [\"calm\"]"));
+        assert!(once.contains("edited_at = \"2026-07-01T10:00:00+02:00\""));
+        assert!(once.contains("Body stays.\n"));
+
+        store.load_library(CachePolicy::Normal).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), once);
+    }
+
+    #[test]
+    fn load_leaves_malformed_front_matter_byte_for_byte() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().join("journals");
+        let store = store_with_entries(&root, &dir.path().join("config"), &[]);
+        let path = root.join("daily/2026-07-13-broken.md");
+        let original = "+++\nschema_version = 1\ntags = [unterminated\n+++\n\nold body\n";
+        fs::write(&path, original).unwrap();
+
+        store.load_library(CachePolicy::Normal).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), original.as_bytes());
     }
 }

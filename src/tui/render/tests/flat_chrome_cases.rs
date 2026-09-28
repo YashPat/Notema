@@ -14,7 +14,7 @@ fn app_with_many_tags(count: usize) -> AppModel {
         fs::write(
             entry_dir.join(format!("{index}.md")),
             format!(
-                "+++\nschema_version = 1\n\n[entry]\ntags = [\"tag-{index:02}\"]\n\n[time]\ncreated_at = \"2026-07-01T10:{index:02}:00+02:00\"\n+++\n\n# Entry {index}\nBody\n"
+                "+++\nschema_version = 1\n\n[entry]\npeople = [\"tag-{index:02}\"]\n\n[time]\ncreated_at = \"2026-07-01T10:{index:02}:00+02:00\"\n+++\n\n# Entry {index}\nBody\n"
             ),
         )
         .unwrap();
@@ -28,7 +28,7 @@ fn app_with_many_tags(count: usize) -> AppModel {
 
 fn tags_state() -> EditMetadataState {
     EditMetadataState::new(
-        MetadataKind::Tags,
+        MetadataKind::People,
         vec![("work".to_string(), 3), ("home".to_string(), 1)],
         vec![0, 1],
         Vec::new(),
@@ -41,7 +41,7 @@ fn many_tags_state() -> EditMetadataState {
         .map(|index| (format!("tag-{index:02}"), index))
         .collect();
     let filtered = (0..all_values.len()).collect();
-    EditMetadataState::new(MetadataKind::Tags, all_values, filtered, Vec::new(), 20)
+    EditMetadataState::new(MetadataKind::People, all_values, filtered, Vec::new(), 20)
 }
 
 #[test]
@@ -52,7 +52,7 @@ fn dialogs_drop_borders_for_a_title_row_with_esc_hint() {
         !rendered.contains('│'),
         "flat dialog still draws side borders"
     );
-    assert!(rendered.contains("Edit Tags"));
+    assert!(rendered.contains("Edit People"));
     assert!(rendered.contains("esc"));
 }
 
@@ -782,7 +782,7 @@ fn flat_dialogs_pad_the_title_and_footer_off_the_card_edge() {
             .collect()
     };
     assert_eq!(row_text(area.y).trim(), "", "top padding row not blank");
-    assert!(row_text(area.y + 1).contains("Edit Tags"));
+    assert!(row_text(area.y + 1).contains("Edit People"));
     assert_eq!(
         row_text(area.y + 2).trim(),
         "",

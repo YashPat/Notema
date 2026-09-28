@@ -13,7 +13,7 @@ use notema_encryption as crypto;
 use rayon::prelude::*;
 use std::{
     fs,
-    path::Path,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
     time::SystemTime,
 };
@@ -117,20 +117,38 @@ pub(crate) fn read_entries(
     paths: Vec<EntryPath>,
     identity: Option<&crypto::UnlockedIdentity>,
 ) -> AppResult<(Vec<Entry>, Vec<String>)> {
-    read_entries_with_progress(paths, identity, None)
+    let (entries, failures, _) = read_entries_with_progress(paths, identity, None, None)?;
+    Ok((entries, failures))
+}
+
+/// What a cache-miss read did to the stamp discovery took before the file was
+/// opened. A strip rewrites the file, so the pre-read stamp must not be saved.
+pub(crate) struct StampUpdate {
+    pub path: PathBuf,
+    pub effect: StampEffect,
+}
+
+pub(crate) enum StampEffect {
+    /// The file was rewritten. Store this observation instead of the one from
+    /// discovery.
+    Refresh { stamp: FileStamp, trusted: bool },
+    /// The rewrite failed. Keep discovery's length and mtime, but do not trust
+    /// them, so the next open misses and tries again.
+    Untrust,
 }
 
 pub(crate) fn read_entries_with_progress(
     paths: Vec<EntryPath>,
     identity: Option<&crypto::UnlockedIdentity>,
+    keys: Option<&crypto::KeyPaths>,
     progress: Option<&(dyn Fn(usize, usize) + Sync)>,
-) -> AppResult<(Vec<Entry>, Vec<String>)> {
+) -> AppResult<(Vec<Entry>, Vec<String>, Vec<StampUpdate>)> {
     let total = paths.len();
     let completed = AtomicUsize::new(0);
     let outcomes = paths
         .par_iter()
         .map(|entry| {
-            let outcome = read_scan_entry(&entry.journal, &entry.path, identity);
+            let outcome = read_scan_entry(&entry.journal, &entry.path, identity, keys);
             let current = completed.fetch_add(1, Ordering::Relaxed) + 1;
             if let Some(progress) = progress {
                 progress(current, total);
@@ -141,11 +159,37 @@ pub(crate) fn read_entries_with_progress(
 
     let mut entries = Vec::with_capacity(outcomes.len());
     let mut failures = Vec::new();
+    let mut stamps = Vec::new();
     for outcome in outcomes {
         match outcome {
-            ScanOutcome::Loaded(entry) => entries.push(entry),
-            ScanOutcome::Failed { entry, message } => {
+            ScanOutcome::Loaded {
+                entry,
+                stamp,
+                warning,
+            } => {
+                if let Some(warning) = warning {
+                    failures.push(warning);
+                }
+                if let Some(effect) = stamp {
+                    stamps.push(StampUpdate {
+                        path: entry.path.clone(),
+                        effect,
+                    });
+                }
+                entries.push(entry);
+            }
+            ScanOutcome::Failed {
+                entry,
+                message,
+                stamp,
+            } => {
                 if let Some(entry) = entry {
+                    if let Some(effect) = stamp {
+                        stamps.push(StampUpdate {
+                            path: entry.path.clone(),
+                            effect,
+                        });
+                    }
                     entries.push(entry);
                 }
                 failures.push(message);
@@ -153,17 +197,22 @@ pub(crate) fn read_entries_with_progress(
         }
     }
     entries.sort_by(|a, b| b.path.cmp(&a.path));
-    Ok((entries, failures))
+    Ok((entries, failures, stamps))
 }
 
 /// One entry's scan result: a usable entry (real or a locked/unreadable
 /// placeholder) or a hard per-file failure degraded to a placeholder plus a
 /// message aggregated into the load report.
 enum ScanOutcome {
-    Loaded(Entry),
+    Loaded {
+        entry: Entry,
+        stamp: Option<StampEffect>,
+        warning: Option<String>,
+    },
     Failed {
         entry: Option<Entry>,
         message: String,
+        stamp: Option<StampEffect>,
     },
 }
 
@@ -172,20 +221,104 @@ enum ScanOutcome {
 /// locked or undecryptable encrypted entry already degrades. The edit path
 /// [`read_entry_with_revision`] keeps hard-failing: a real edit must not open a
 /// placeholder.
+///
+/// When `keys` is set, a readable file loses its `tags` key on this pass. The
+/// edit path never passes `keys`, so a save's revision still matches the bytes
+/// it hashed.
 fn read_scan_entry(
     journal: &str,
     path: &Path,
     identity: Option<&crypto::UnlockedIdentity>,
+    keys: Option<&crypto::KeyPaths>,
 ) -> ScanOutcome {
-    match read_entry(journal, path, identity) {
-        Ok(entry) => ScanOutcome::Loaded(entry),
-        Err(error) => {
-            let message = format!("{}: {error:#}", path.display());
-            // A placeholder needs the entry id; if even that is unavailable the
-            // entry is dropped, but the failure is still reported.
-            let entry = plaintext_unreadable_entry(journal, path).ok();
-            ScanOutcome::Failed { entry, message }
+    let Some(encryption_state) = decodable_state(path, identity) else {
+        return loaded(locked_entry(journal, path), path);
+    };
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) => return failed_read(journal, path, error.into()),
+    };
+    let mut content = match decode_entry_content(path, bytes, identity) {
+        Ok(content) => content,
+        Err(error) if matches!(encryption_state, EntryEncryptionState::EncryptedUnlocked) => {
+            if error
+                .downcast_ref::<crate::EncryptionError>()
+                .is_some_and(crate::EncryptionError::is_no_matching_keys)
+            {
+                return loaded(locked_entry(journal, path), path);
+            }
+            return loaded(unreadable_entry(journal, path), path);
         }
+        Err(error) => return failed_read(journal, path, error),
+    };
+
+    let mut stamp = None;
+    let mut warning = None;
+    if let Some(keys) = keys
+        && let Some(stripped) = crate::markdown::content_without_tags(&content)
+    {
+        let write = if is_encrypted_entry_file(path) {
+            super::edit::write_encrypted_entry_content(keys, path, &stripped)
+        } else {
+            super::edit::write_plain_atomic(path, &stripped)
+        };
+        match write {
+            Ok(()) => {
+                content = stripped;
+                stamp = Some(refresh_stamp(path));
+            }
+            Err(error) => {
+                warning = Some(format!("{}: {error:#}", path.display()));
+                stamp = Some(StampEffect::Untrust);
+            }
+        }
+    }
+
+    match entry_from_plaintext(journal, path, encryption_state, content) {
+        Ok(entry) => ScanOutcome::Loaded {
+            entry,
+            stamp,
+            warning,
+        },
+        Err(error) => ScanOutcome::Failed {
+            entry: plaintext_unreadable_entry(journal, path).ok(),
+            message: format!("{}: {error:#}", path.display()),
+            stamp,
+        },
+    }
+}
+
+fn loaded(entry: AppResult<Entry>, path: &Path) -> ScanOutcome {
+    match entry {
+        Ok(entry) => ScanOutcome::Loaded {
+            entry,
+            stamp: None,
+            warning: None,
+        },
+        Err(error) => ScanOutcome::Failed {
+            entry: None,
+            message: format!("{}: {error:#}", path.display()),
+            stamp: None,
+        },
+    }
+}
+
+fn failed_read(journal: &str, path: &Path, error: anyhow::Error) -> ScanOutcome {
+    ScanOutcome::Failed {
+        entry: plaintext_unreadable_entry(journal, path).ok(),
+        message: format!("{}: {error:#}", path.display()),
+        stamp: None,
+    }
+}
+
+fn refresh_stamp(path: &Path) -> StampEffect {
+    match fs::metadata(path) {
+        Ok(metadata) => {
+            let stamp = FileStamp::from_metadata(&metadata);
+            let trusted = stamp.is_trustworthy_at(SystemTime::now());
+            StampEffect::Refresh { stamp, trusted }
+        }
+        Err(_) => StampEffect::Untrust,
     }
 }
 
@@ -278,6 +411,15 @@ fn entry_from_stored_bytes(
         }
         Err(error) => return Err(error),
     };
+    entry_from_plaintext(journal, path, encryption_state, content)
+}
+
+fn entry_from_plaintext(
+    journal: &str,
+    path: &Path,
+    encryption_state: EntryEncryptionState,
+    content: String,
+) -> AppResult<Entry> {
     let (front_matter, body) = split_front_matter(&content);
     let (parsed, warning) = match front_matter {
         Some(front_matter) => match crate::markdown::parse_front_matter(front_matter) {
@@ -314,7 +456,6 @@ fn entry_from_stored_bytes(
         activities,
         feelings,
         people,
-        tags,
         mood,
         starred,
         location: _,
@@ -331,7 +472,6 @@ fn entry_from_stored_bytes(
         activities,
         feelings,
         people,
-        tags,
         mood,
         starred,
         location,
@@ -419,7 +559,6 @@ fn placeholder_entry(
         activities: Vec::new(),
         feelings: Vec::new(),
         people: Vec::new(),
-        tags: Vec::new(),
         mood: None,
         starred: false,
         location: None,

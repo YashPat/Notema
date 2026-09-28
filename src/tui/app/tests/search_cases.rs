@@ -39,7 +39,7 @@ fn a_tag_drill_down_is_scoped_to_the_journal_it_came_from() {
         fs::create_dir_all(&entry_dir).unwrap();
         fs::write(
             entry_dir.join("a.md"),
-            "+++\nschema_version = 1\n\n[entry]\ntags = [\"admin\"]\n+++\n\n# A\n",
+            "+++\nschema_version = 1\n\n[entry]\npeople = [\"admin\"]\n+++\n\n# A\n",
         )
         .unwrap();
     }
@@ -48,7 +48,7 @@ fn a_tag_drill_down_is_scoped_to_the_journal_it_came_from() {
     app.select_journal_by_name("work");
     app.nav.focus = Focus::Entries;
 
-    app.begin_tag_search("admin");
+    app.begin_people_search("admin");
 
     assert_eq!(app.search.scope, SearchScope::Journal("work".to_string()));
     assert_eq!(app.search.hits.len(), 1);

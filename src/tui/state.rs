@@ -35,7 +35,7 @@ fn toast_lifetime(message: &str) -> Duration {
 const TOAST_CAP: usize = 4;
 
 /// Vertical scroll offsets for the panels that scroll their own body: the entry
-/// reader, and the insights panel's ranked-list tabs (People / Activities / Tags).
+/// reader, and the insights panel's ranked-list tabs (People / Activities).
 #[derive(Default)]
 pub(crate) struct ScrollState {
     pub(crate) reader: u16,
@@ -379,7 +379,6 @@ pub(crate) trait ListNav {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MetadataKind {
-    Tags,
     People,
     Activities,
 }
@@ -389,11 +388,10 @@ impl MetadataKind {
     /// names the one it wants, so this is gated with its only caller rather than
     /// left as an enumeration nothing enumerates.
     #[cfg(feature = "bench")]
-    pub(crate) const ALL: [MetadataKind; 3] = [Self::Tags, Self::People, Self::Activities];
+    pub(crate) const ALL: [MetadataKind; 2] = [Self::People, Self::Activities];
 
     pub(crate) fn title(self) -> &'static str {
         match self {
-            MetadataKind::Tags => "Tags",
             MetadataKind::People => "People",
             MetadataKind::Activities => "Activities",
         }
@@ -402,7 +400,6 @@ impl MetadataKind {
     /// The search prefix listing this facet's values, colon included.
     pub(crate) fn search_prefix(self) -> &'static str {
         match self {
-            MetadataKind::Tags => Prefix::Tags,
             MetadataKind::People => Prefix::People,
             MetadataKind::Activities => Prefix::Activities,
         }

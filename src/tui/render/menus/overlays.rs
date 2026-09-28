@@ -2,8 +2,7 @@ use super::*;
 use ratatui::widgets::{List, ListItem};
 
 /// The metadata chooser's rows: a mnemonic key and the facet it opens.
-const METADATA_MENU_ITEMS: [(&str, &str); 6] = [
-    ("t", "Tags"),
+const METADATA_MENU_ITEMS: [(&str, &str); 5] = [
     ("p", "People"),
     ("a", "Activities"),
     ("f", "Feelings"),

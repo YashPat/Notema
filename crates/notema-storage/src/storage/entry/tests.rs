@@ -118,7 +118,7 @@ fn create_entry_writes_body_after_front_matter() {
 
     assert!(fields.datetime.created_at.is_some());
     assert!(fields.datetime.edited_at.is_some());
-    assert!(fields.metadata.tags.is_empty());
+    assert!(fields.metadata.people.is_empty());
     // A native entry captures this machine's IANA zone name, when resolvable.
     assert_eq!(
         fields.datetime.timezone,
@@ -336,7 +336,9 @@ fn entry_tags_read_toml_list() {
 
     let entry = read_entry("journal", &path, None).unwrap();
 
-    assert_eq!(entry.tags, vec!["work", "deep focus"]);
+    assert!(entry.activities.is_empty());
+    assert!(entry.people.is_empty());
+    assert_eq!(entry.preview, "Tagged");
 }
 
 #[test]
@@ -357,7 +359,6 @@ fn entry_feelings_read_known_values_only() {
 #[test]
 fn create_entry_writes_metadata() {
     let dir = tempdir().unwrap();
-    let tags = vec!["rust".to_string()];
     let people = vec!["alex".to_string()];
     let activities = vec!["programming".to_string(), "cycling".to_string()];
     let feelings = vec!["calm".to_string(), "focused".to_string()];
@@ -368,7 +369,6 @@ fn create_entry_writes_metadata() {
         "work",
         "Some text",
         &Metadata {
-            tags: tags.clone(),
             people: people.clone(),
             activities: activities.clone(),
             feelings: feelings.clone(),
@@ -381,7 +381,6 @@ fn create_entry_writes_metadata() {
     let (front_matter, _) = crate::markdown::split_front_matter(&text);
 
     let fields = front_matter.map(crate::markdown::front_matter_fields);
-    assert_eq!(fields.as_ref().map(|f| f.metadata.tags.clone()), Some(tags));
     assert_eq!(
         fields.as_ref().map(|f| f.metadata.people.clone()),
         Some(people)
@@ -973,7 +972,7 @@ fn save_entry_edit_rolls_back_staged_assets_when_the_content_cannot_be_rendered(
 
     let original_metadata = Metadata::default();
     let metadata = Metadata {
-        tags: vec!["added".to_string()],
+        people: vec!["added".to_string()],
         ..Metadata::default()
     };
 

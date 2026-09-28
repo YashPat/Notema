@@ -80,17 +80,9 @@ pub fn analyze(entries: &[&Entry], today: Date) -> Analytics {
 
     let correlations = correlations::build_correlations(entries);
     let lifts_person = pick_extreme(correlations.people.iter(), today, true);
-    let lifts_thing = pick_extreme(
-        correlations.activities.iter().chain(&correlations.tags),
-        today,
-        true,
-    );
+    let lifts_thing = pick_extreme(correlations.activities.iter(), today, true);
     let drains_person = pick_extreme(correlations.people.iter(), today, false);
-    let drains_thing = pick_extreme(
-        correlations.activities.iter().chain(&correlations.tags),
-        today,
-        false,
-    );
+    let drains_thing = pick_extreme(correlations.activities.iter(), today, false);
     let top_feeling_this_year = top_feeling_in_year(entries, &dates, i32::from(today.year()));
 
     Analytics {
@@ -244,7 +236,6 @@ pub(crate) mod test_support {
             activities: Vec::new(),
             feelings: Vec::new(),
             people: Vec::new(),
-            tags: Vec::new(),
             mood: None,
             starred: false,
             location: None,
@@ -368,11 +359,17 @@ mod tests {
             dated("2024-01-05T00:00:00Z", 5, |e| {
                 e.people = vec!["gym-buddy".into()]
             }),
-            dated("2024-01-06T00:00:00Z", 5, |e| e.tags = vec!["sun".into()]),
-            dated("2024-01-07T00:00:00Z", 5, |e| e.tags = vec!["sun".into()]),
-            dated("2024-01-08T00:00:00Z", 5, |e| e.tags = vec!["sun".into()]),
+            dated("2024-01-06T00:00:00Z", 5, |e| {
+                e.activities = vec!["sun".into()]
+            }),
+            dated("2024-01-07T00:00:00Z", 5, |e| {
+                e.activities = vec!["sun".into()]
+            }),
+            dated("2024-01-08T00:00:00Z", 5, |e| {
+                e.activities = vec!["sun".into()]
+            }),
         ];
-        // A companion comes from people, the thing from activities/tags.
+        // A companion comes from people, the thing from activities.
         let analytics = analyze(&refs(&entries), date(2024, 1, 5));
         assert_eq!(
             analytics.highlights.lifts_person.as_deref(),
@@ -399,9 +396,15 @@ mod tests {
             dated("2024-01-03T00:00:00Z", -5, |e| e.people = vec!["ex".into()]),
             dated("2024-01-04T00:00:00Z", -5, |e| e.people = vec!["ex".into()]),
             dated("2024-01-05T00:00:00Z", -5, |e| e.people = vec!["ex".into()]),
-            dated("2024-01-06T00:00:00Z", -5, |e| e.tags = vec!["rain".into()]),
-            dated("2024-01-07T00:00:00Z", -5, |e| e.tags = vec!["rain".into()]),
-            dated("2024-01-08T00:00:00Z", -5, |e| e.tags = vec!["rain".into()]),
+            dated("2024-01-06T00:00:00Z", -5, |e| {
+                e.activities = vec!["rain".into()]
+            }),
+            dated("2024-01-07T00:00:00Z", -5, |e| {
+                e.activities = vec!["rain".into()]
+            }),
+            dated("2024-01-08T00:00:00Z", -5, |e| {
+                e.activities = vec!["rain".into()]
+            }),
         ];
         let analytics = analyze(&refs(&entries), date(2024, 1, 9));
         assert_eq!(analytics.highlights.drains_person.as_deref(), Some("ex"));
@@ -428,7 +431,7 @@ mod tests {
             // Seen once, on the best day there is.
             dated("2024-01-03T00:00:00Z", 5, |e| {
                 e.people = vec!["stranger".into()];
-                e.tags = vec!["fluke".into()];
+                e.activities = vec!["fluke".into()];
             }),
         ];
         let analytics = analyze(&refs(&entries), date(2024, 1, 4));
@@ -438,11 +441,11 @@ mod tests {
         // Two more sightings clear the floor, and the same value headlines.
         entries.push(dated("2024-01-04T00:00:00Z", 5, |e| {
             e.people = vec!["stranger".into()];
-            e.tags = vec!["fluke".into()];
+            e.activities = vec!["fluke".into()];
         }));
         entries.push(dated("2024-01-05T00:00:00Z", 5, |e| {
             e.people = vec!["stranger".into()];
-            e.tags = vec!["fluke".into()];
+            e.activities = vec!["fluke".into()];
         }));
         let analytics = analyze(&refs(&entries), date(2024, 1, 6));
         assert_eq!(

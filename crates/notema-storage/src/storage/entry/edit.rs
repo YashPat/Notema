@@ -187,9 +187,6 @@ fn revision_conflict(path: &Path) -> anyhow::Error {
 
 fn changed_metadata_fields(original: &Metadata, current: &Metadata) -> Vec<MetadataField> {
     let mut fields = Vec::new();
-    if current.tags != original.tags {
-        fields.push(MetadataField::Tags(current.tags.clone()));
-    }
     if current.people != original.people {
         fields.push(MetadataField::People(current.people.clone()));
     }

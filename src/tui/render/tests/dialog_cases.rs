@@ -237,7 +237,7 @@ fn edit_tags_dialog_keeps_help_visible_below_spacer() {
     let active_len = all_values.len();
     let rendered = render_edit_tags_dialog_text(
         EditMetadataState::new(
-            MetadataKind::Tags,
+            MetadataKind::People,
             all_values,
             filtered,
             Vec::new(),
@@ -265,7 +265,7 @@ fn edit_tags_dialog_keeps_list_gutter_when_selection_is_scrolled_out() {
     let filtered: Vec<usize> = (0..all_values.len()).collect();
     let active_len = all_values.len();
     let mut state = EditMetadataState::new(
-        MetadataKind::Tags,
+        MetadataKind::People,
         all_values,
         filtered,
         Vec::new(),
@@ -284,7 +284,7 @@ fn edit_tags_dialog_keeps_list_gutter_when_selection_is_scrolled_out() {
 #[test]
 fn edit_tags_dialog_counts_no_matches_row_when_sizing() {
     let mut state = EditMetadataState::new(
-        MetadataKind::Tags,
+        MetadataKind::People,
         vec![("work".to_string(), 1)],
         Vec::new(),
         Vec::new(),
@@ -330,7 +330,9 @@ fn filter_dialog_renders_across_sizes() {
     assert!(text.contains("Filter —"), "missing title: {text}");
     // The dialog is sized to the full tab strip, so every full label fits — even
     // the longest ("Locations") — without collapsing to shorter labels.
-    assert!(text.contains("Tags"), "missing a tab label: {text}");
+    assert!(text.contains("People"), "missing a tab label: {text}");
+    assert!(text.contains("Activities"), "missing a tab label: {text}");
+    assert!(text.contains("Feelings"), "missing a tab label: {text}");
     assert!(
         text.contains("Locations"),
         "full tab labels should fit: {text}"

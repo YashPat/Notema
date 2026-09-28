@@ -12,7 +12,6 @@ use crate::tui::{
 
 pub(crate) fn metadata_values(entry: &Entry, kind: MetadataKind) -> &[String] {
     match kind {
-        MetadataKind::Tags => &entry.tags,
         MetadataKind::People => &entry.people,
         MetadataKind::Activities => &entry.activities,
     }
@@ -86,10 +85,6 @@ impl AppModel {
         (sort_casing(active), sort_casing(archived))
     }
 
-    pub(crate) fn begin_edit_tags(&mut self) {
-        self.begin_edit_metadata(MetadataKind::Tags);
-    }
-
     pub(crate) fn begin_edit_people(&mut self) {
         self.begin_edit_metadata(MetadataKind::People);
     }
@@ -113,10 +108,6 @@ impl AppModel {
         self.overlay = Overlay::EditMetadata(Box::new(EditMetadataState::new(
             kind, all_values, filtered, entry_tags, active_len,
         )));
-    }
-
-    pub(crate) fn begin_tag_search(&mut self, tag: &str) {
-        self.begin_metadata_search(MetadataKind::Tags, tag);
     }
 
     pub(crate) fn begin_people_search(&mut self, person: &str) {
@@ -327,7 +318,13 @@ mod tests {
             .map(|index| (format!("tag-{index:02}"), index))
             .collect();
         let filtered: Vec<usize> = (0..count).collect();
-        EditMetadataState::new(MetadataKind::Tags, all_values, filtered, Vec::new(), count)
+        EditMetadataState::new(
+            MetadataKind::People,
+            all_values,
+            filtered,
+            Vec::new(),
+            count,
+        )
     }
 
     #[test]
@@ -335,7 +332,7 @@ mod tests {
         // The master list holds "Ärger"; typing "ärger" must reuse it, not create a
         // second casing variant — `eq_ignore_ascii_case` would fork non-ASCII case.
         let mut state = EditMetadataState::new(
-            MetadataKind::Tags,
+            MetadataKind::People,
             vec![("Ärger".to_string(), 3)],
             vec![0],
             Vec::new(),
@@ -381,7 +378,7 @@ mod tests {
             .collect();
         let filtered: Vec<usize> = (0..10).collect();
         let state = EditMetadataState::new(
-            MetadataKind::Tags,
+            MetadataKind::People,
             all_values,
             filtered,
             vec!["tag-07".to_string()],
@@ -401,7 +398,7 @@ mod tests {
 
         // Several selected: no single "current" value, so start at the top.
         let many = EditMetadataState::new(
-            MetadataKind::Tags,
+            MetadataKind::People,
             all_values.clone(),
             filtered.clone(),
             vec!["tag-05".to_string(), "tag-08".to_string()],
@@ -410,7 +407,8 @@ mod tests {
         assert_eq!(many.selected_index(), Some(0));
 
         // None selected: likewise start at the top.
-        let none = EditMetadataState::new(MetadataKind::Tags, all_values, filtered, Vec::new(), 10);
+        let none =
+            EditMetadataState::new(MetadataKind::People, all_values, filtered, Vec::new(), 10);
         assert_eq!(none.selected_index(), Some(0));
     }
 
@@ -419,7 +417,7 @@ mod tests {
         // One active value (index 0) and one archived-only value (index 1).
         let all_values = vec![("berlin".to_string(), 3), ("wanderlust".to_string(), 5)];
         let mut state =
-            EditMetadataState::new(MetadataKind::Tags, all_values, vec![0], Vec::new(), 1);
+            EditMetadataState::new(MetadataKind::People, all_values, vec![0], Vec::new(), 1);
 
         // With no query only the active value is offered.
         assert_eq!(state.filtered, vec![0]);
@@ -441,7 +439,7 @@ mod tests {
         // One active value; an archived-only value sits after the active boundary.
         let all_values = vec![("berlin".to_string(), 3), ("wanderlust".to_string(), 5)];
         let mut state =
-            EditMetadataState::new(MetadataKind::Tags, all_values, vec![0], Vec::new(), 1);
+            EditMetadataState::new(MetadataKind::People, all_values, vec![0], Vec::new(), 1);
 
         state.input = "hiking".into();
         state.add_from_input();
@@ -496,7 +494,7 @@ mod tests {
     fn toggle_selected_preserves_display_casing() {
         let all_values = vec![("iPhone".to_string(), 5)];
         let mut state =
-            EditMetadataState::new(MetadataKind::Tags, all_values, vec![0], Vec::new(), 1);
+            EditMetadataState::new(MetadataKind::People, all_values, vec![0], Vec::new(), 1);
 
         state.toggle_selected();
 

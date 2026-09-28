@@ -51,14 +51,13 @@ pub(crate) struct EntryMetadataLayout {
     pub(crate) environment: Option<Rect>,
     /// The full-width mood bar's row, when the entry carries a mood.
     pub(crate) mood: Option<Rect>,
-    /// The chip pills — every feeling/person/activity/tag in one label-less
+    /// The chip pills — every feeling/person/activity in one label-less
     /// flow, the category carried by each pill's own style.
     pub(crate) chips: Option<Rect>,
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct EntryMetadataValues<'a> {
-    pub(crate) tags: &'a [String],
     pub(crate) people: &'a [String],
     pub(crate) activities: &'a [String],
     pub(crate) feelings: &'a [String],
@@ -214,7 +213,7 @@ const fn pill_cells(value_width: u16) -> u16 {
 /// The single space between two pills on a row.
 const PILL_SEPARATOR: u16 = 1;
 
-/// Every chip in display order — feelings, people, activities, tags — as
+/// Every chip in display order — feelings, people, activities — as
 /// `(category, value)` pairs. One label-less flow; the pill's own style is
 /// what says which category a value belongs to.
 pub(crate) fn chip_items<'a>(
@@ -226,7 +225,6 @@ pub(crate) fn chip_items<'a>(
     of(PillCategory::Feelings, values.feelings)
         .chain(of(PillCategory::People, values.people))
         .chain(of(PillCategory::Activities, values.activities))
-        .chain(of(PillCategory::Tags, values.tags))
 }
 
 /// Flow the chips into display rows of `row_width` cells: greedy, never

@@ -544,7 +544,7 @@ struct MetadataSection {
     glyphs: MetadataGlyphsSection,
 }
 
-/// How feelings/people/activities/tags chips are drawn. Colors only apply to
+/// How feelings/people/activities chips are drawn. Colors only apply to
 /// the `bg` style; `reversed` stays code-enforced (monochrome contract) and
 /// `bracket` is plain text.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -554,6 +554,9 @@ struct PillsSection {
     feelings: Option<StyleSpec>,
     people: Option<StyleSpec>,
     activities: Option<StyleSpec>,
+    /// Accepted so a hand-edited theme that still names tags keeps loading.
+    /// The category is gone, so the value is ignored.
+    #[allow(dead_code)]
     tags: Option<StyleSpec>,
 }
 
@@ -598,6 +601,8 @@ struct MetadataGlyphsSection {
     feelings: Option<String>,
     people: Option<String>,
     activities: Option<String>,
+    /// Accepted so a hand-edited theme that still names tags keeps loading.
+    #[allow(dead_code)]
     tags: Option<String>,
     weather: WeatherGlyphsSection,
     moon: MoonGlyphsSection,
@@ -941,7 +946,6 @@ impl ThemeFile {
         let pill_feelings = pill(&pills.feelings, "metadata.pills.feelings")?;
         let pill_people = pill(&pills.people, "metadata.pills.people")?;
         let pill_activities = pill(&pills.activities, "metadata.pills.activities")?;
-        let pill_tags = pill(&pills.tags, "metadata.pills.tags")?;
         let environment = &self.metadata.environment;
         let aqi_poor = style(
             &environment.aqi_poor,
@@ -1128,7 +1132,6 @@ impl ThemeFile {
             pill_feelings,
             pill_people,
             pill_activities,
-            pill_tags,
             aqi_poor,
             aqi_very_poor,
             aqi_extremely_poor,
@@ -1156,7 +1159,6 @@ impl ThemeFile {
                     '◆',
                     "metadata.glyphs.activities",
                 )?,
-                tags: glyph(&metadata_glyphs.tags, '#', "metadata.glyphs.tags")?,
                 weather,
                 moon,
             },

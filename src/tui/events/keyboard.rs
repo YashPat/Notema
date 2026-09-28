@@ -277,7 +277,6 @@ pub(super) fn key_to_action(
 /// editor's gated variant. `None` for any other key.
 fn metadata_menu_letter_action(key: KeyEvent) -> Option<Action> {
     Some(match key.code {
-        KeyCode::Char('t') => Action::Metadata(MetadataAction::BeginEdit(MetadataKind::Tags)),
         KeyCode::Char('p') => Action::Metadata(MetadataAction::BeginEdit(MetadataKind::People)),
         KeyCode::Char('a') => Action::Metadata(MetadataAction::BeginEdit(MetadataKind::Activities)),
         KeyCode::Char('f') => Action::Metadata(MetadataAction::BeginFeelings),
@@ -514,9 +513,6 @@ fn browse_key_to_action(app: &AppModel, key: KeyEvent, reader_available: bool) -
         {
             Some(Action::Settings(SettingsAction::ToggleArchiveJournal))
         }
-        KeyCode::Char('t') if app.can_act_on_selected_entry() => Some(Action::Metadata(
-            MetadataAction::BeginEdit(MetadataKind::Tags),
-        )),
         KeyCode::Char('p') if app.can_act_on_selected_entry() => Some(Action::Metadata(
             MetadataAction::BeginEdit(MetadataKind::People),
         )),
@@ -576,9 +572,6 @@ fn reader_key_to_action(app: &AppModel, key: KeyEvent) -> Option<Action> {
         }
         KeyCode::Char('e') => Some(Action::Browser(BrowserAction::EditSelected)),
         KeyCode::Char('d') => Some(Action::Browser(BrowserAction::BeginDelete)),
-        KeyCode::Char('t') => Some(Action::Metadata(MetadataAction::BeginEdit(
-            MetadataKind::Tags,
-        ))),
         KeyCode::Char('p') => Some(Action::Metadata(MetadataAction::BeginEdit(
             MetadataKind::People,
         ))),

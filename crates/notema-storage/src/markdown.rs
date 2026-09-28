@@ -65,7 +65,6 @@ fn metadata_is_empty(metadata: &Metadata) -> bool {
     metadata.activities.is_empty()
         && metadata.feelings.is_empty()
         && metadata.people.is_empty()
-        && metadata.tags.is_empty()
         && metadata.mood.is_none()
         && !metadata.starred
 }
@@ -233,6 +232,9 @@ fn map_front_matter(content: &str, mutate: impl FnOnce(&mut FrontMatter)) -> Opt
     let known_before = toml::Value::try_from(&before).ok()?.try_into().ok()?;
     let known_after = toml::Value::try_from(&after).ok()?.try_into().ok()?;
     apply_known_diff(&mut raw, &known_before, &known_after);
+    // `tags` is no longer a known field, so the diff above would leave a key
+    // that was already on disk and the next edit would write it back.
+    drop_legacy_tags(&mut raw);
 
     let front_matter = toml::to_string(&raw).ok()?;
     Some(render_raw_entry(&front_matter, body))
@@ -269,6 +271,16 @@ fn apply_known_diff(raw: &mut toml::Table, before: &toml::Table, after: &toml::T
                 };
                 if remove_table {
                     raw.remove(&key);
+                }
+            }
+            (_, Some(toml::Value::Table(after_table))) => {
+                let raw_value = raw
+                    .entry(key)
+                    .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+                if let toml::Value::Table(raw_table) = raw_value {
+                    apply_known_diff(raw_table, &toml::Table::new(), after_table);
+                } else {
+                    *raw_value = toml::Value::Table(after_table.clone());
                 }
             }
             (_, Some(value)) => {
@@ -317,7 +329,6 @@ fn with_metadata_fields_inner(
 
 pub(crate) fn apply_metadata_field(fm: &mut FrontMatter, field: &MetadataField) {
     match field {
-        MetadataField::Tags(values) => fm.metadata.tags = values.clone(),
         MetadataField::People(values) => fm.metadata.people = values.clone(),
         MetadataField::Activities(values) => fm.metadata.activities = values.clone(),
         MetadataField::Feelings(values) => fm.metadata.feelings = values.clone(),
@@ -327,6 +338,90 @@ pub(crate) fn apply_metadata_field(fm: &mut FrontMatter, field: &MetadataField) 
         MetadataField::Weather(weather) => fm.weather = weather.as_deref().cloned(),
         MetadataField::Celestial(celestial) => fm.celestial = celestial.as_deref().cloned(),
         MetadataField::AirQuality(air_quality) => fm.air_quality = air_quality.as_deref().cloned(),
+    }
+}
+
+/// Delete a top-level `tags` key and `[entry].tags` without reformatting the
+/// rest of the file. `None` when there is nothing to write: no front matter,
+/// malformed TOML, an unsupported `schema_version`, or no `tags` key.
+pub(crate) fn content_without_tags(content: &str) -> Option<String> {
+    let (start, end) = front_matter_interior(content)?;
+    let front_matter = &content[start..end];
+    parse_front_matter(front_matter.trim_end_matches(['\r', '\n'])).ok()?;
+    let mut doc: toml_edit::DocumentMut = front_matter.parse().ok()?;
+    if !remove_tags_document(&mut doc) {
+        return None;
+    }
+    let mut rendered = doc.to_string();
+    if !rendered.ends_with('\n') {
+        rendered.push('\n');
+    }
+    let mut rewritten = String::with_capacity(content.len() - (end - start) + rendered.len());
+    rewritten.push_str(&content[..start]);
+    rewritten.push_str(&rendered);
+    rewritten.push_str(&content[end..]);
+    Some(rewritten)
+}
+
+/// The byte range of the front matter between the opening fence and the
+/// closing `+++` line. The closing fence itself stays in the suffix so a
+/// rewrite can splice a new interior without touching the body.
+fn front_matter_interior(content: &str) -> Option<(usize, usize)> {
+    let start = if content.starts_with("+++\r\n") {
+        5
+    } else if content.starts_with("+++\n") {
+        4
+    } else {
+        return None;
+    };
+    let rest = &content[start..];
+    let mut offset = 0;
+    for line in rest.split_inclusive('\n') {
+        let marker = line.trim_end_matches('\n').trim_end_matches('\r');
+        if marker == "+++" {
+            return Some((start, start + offset));
+        }
+        offset += line.len();
+    }
+    if let Some(index) = rest.rfind('\n') {
+        let marker = &rest[index + 1..];
+        if marker == "+++" {
+            return Some((start, start + index + 1));
+        }
+    }
+    None
+}
+
+fn remove_tags_document(doc: &mut toml_edit::DocumentMut) -> bool {
+    let mut changed = doc.remove("tags").is_some();
+    let removed_entry_tags = doc
+        .get_mut("entry")
+        .and_then(toml_edit::Item::as_table_mut)
+        .is_some_and(|table| table.remove("tags").is_some());
+    if removed_entry_tags {
+        changed = true;
+        let empty = doc
+            .get("entry")
+            .and_then(toml_edit::Item::as_table)
+            .is_some_and(toml_edit::Table::is_empty);
+        if empty {
+            doc.remove("entry");
+        }
+    }
+    changed
+}
+
+fn drop_legacy_tags(raw: &mut toml::Table) {
+    raw.remove("tags");
+    let drop_entry = match raw.get_mut("entry") {
+        Some(toml::Value::Table(entry)) => {
+            entry.remove("tags");
+            entry.is_empty()
+        }
+        _ => false,
+    };
+    if drop_entry {
+        raw.remove("entry");
     }
 }
 
@@ -436,23 +531,24 @@ mod tests {
     }
 
     #[test]
-    fn front_matter_tags_reads_list() {
-        let tags =
-            front_matter_fields("schema_version = 1\n\n[entry]\ntags = [\"foo\", \"bar\"]\n")
+    fn front_matter_people_reads_list() {
+        let people =
+            front_matter_fields("schema_version = 1\n\n[entry]\npeople = [\"foo\", \"bar\"]\n")
                 .metadata
-                .tags;
+                .people;
 
-        assert_eq!(tags, vec!["foo", "bar"]);
+        assert_eq!(people, vec!["foo", "bar"]);
     }
 
     #[test]
-    fn front_matter_tags_handles_commas_in_values() {
-        let tags =
-            front_matter_fields("schema_version = 1\n\n[entry]\ntags = [\"foo, bar\", \"baz\"]\n")
-                .metadata
-                .tags;
+    fn front_matter_people_handles_commas_in_values() {
+        let people = front_matter_fields(
+            "schema_version = 1\n\n[entry]\npeople = [\"foo, bar\", \"baz\"]\n",
+        )
+        .metadata
+        .people;
 
-        assert_eq!(tags, vec!["foo, bar", "baz"]);
+        assert_eq!(people, vec!["foo, bar", "baz"]);
     }
 
     #[test]
@@ -597,7 +693,7 @@ mod tests {
         // into empty output, so assert the tables are actually there.
         let fm = FrontMatter {
             metadata: Metadata {
-                tags: vec!["dream".to_string()],
+                people: vec!["dream".to_string()],
                 ..Metadata::default()
             },
             datetime: EntryTimestamps {
@@ -621,15 +717,15 @@ mod tests {
 
         let rendered = render_entry(&fm, "# Body\n");
         assert!(rendered.contains("[location]"), "table missing: {rendered}");
-        // `tags` now lives inside `[entry]`, the first table, and the tables keep
-        // struct order: [entry], [time], [import], [location].
+        // `[entry]` is the first table, and the tables keep struct order:
+        // [entry], [time], [import], [location].
         let entry_at = rendered.find("[entry]").unwrap();
-        let tags_at = rendered.find("tags = ").unwrap();
+        let people_at = rendered.find("people = ").unwrap();
         let dates_at = rendered.find("[time]").unwrap();
         let import_at = rendered.find("[import]").unwrap();
         let location_at = rendered.find("[location]").unwrap();
-        assert!(entry_at < tags_at);
-        assert!(tags_at < dates_at);
+        assert!(entry_at < people_at);
+        assert!(people_at < dates_at);
         assert!(entry_at < dates_at);
         assert!(dates_at < import_at);
         assert!(import_at < location_at);
@@ -638,7 +734,7 @@ mod tests {
         let (front_matter, _) = split_front_matter(&rendered);
         let parsed = front_matter_fields(front_matter.unwrap());
         assert_eq!(parsed.location, fm.location);
-        assert_eq!(parsed.metadata.tags, vec!["dream".to_string()]);
+        assert_eq!(parsed.metadata.people, vec!["dream".to_string()]);
         assert_eq!(parsed.import, fm.import);
         assert_eq!(
             parsed.datetime.created_at.as_deref(),
@@ -702,7 +798,7 @@ mod tests {
         // A metadata edit re-renders the whole front matter; the capture-only
         // timezone must survive untouched, like the import provenance does.
         let updated =
-            with_metadata_fields(content, &[MetadataField::Tags(vec!["x".to_string()])]).unwrap();
+            with_metadata_fields(content, &[MetadataField::People(vec!["x".to_string()])]).unwrap();
 
         assert_eq!(
             front_matter_fields(split_front_matter(&updated).0.unwrap())
@@ -738,7 +834,7 @@ mod tests {
     fn empty_metadata_lists_are_omitted_from_front_matter() {
         let rendered = render_entry(&FrontMatter::default(), "# Body\n");
 
-        for key in ["tags", "people", "activities", "feelings"] {
+        for key in ["people", "activities", "feelings"] {
             assert!(
                 !rendered.contains(key),
                 "empty `{key}` should not appear in front matter:\n{rendered}"
@@ -747,14 +843,16 @@ mod tests {
 
         // A non-empty list is still written.
         let mut fm = FrontMatter::default();
-        fm.metadata.tags = vec!["work".to_string()];
-        assert!(render_entry(&fm, "# Body\n").contains("tags = [\"work\"]"));
+        fm.metadata.people = vec!["work".to_string()];
+        assert!(render_entry(&fm, "# Body\n").contains("people = [\"work\"]"));
     }
 
     #[test]
     fn malformed_front_matter_returns_empty_metadata() {
         assert_eq!(
-            front_matter_fields("tags = [unterminated").metadata.tags,
+            front_matter_fields("people = [unterminated")
+                .metadata
+                .people,
             Vec::<String>::new()
         );
         assert_eq!(
@@ -767,14 +865,14 @@ mod tests {
 
     #[test]
     fn with_metadata_field_replaces_list_without_stale_entries() {
-        let content = "+++\nschema_version = 1\n\n[entry]\ntags = [\"old\", \"stale\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\n# Body\n";
-        let tags = vec!["new".to_string(), "next".to_string()];
+        let content = "+++\nschema_version = 1\n\n[entry]\npeople = [\"old\", \"stale\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\n# Body\n";
+        let people = vec!["new".to_string(), "next".to_string()];
 
-        let updated = with_metadata_fields(content, &[MetadataField::Tags(tags)]).unwrap();
+        let updated = with_metadata_fields(content, &[MetadataField::People(people)]).unwrap();
 
         let (front_matter, _) = split_front_matter(&updated);
         assert_eq!(
-            front_matter.map(|fm| front_matter_fields(fm).metadata.tags),
+            front_matter.map(|fm| front_matter_fields(fm).metadata.people),
             Some(vec!["new".to_string(), "next".to_string()])
         );
         assert!(!updated.contains("old"));
@@ -812,17 +910,20 @@ mod tests {
 
     #[test]
     fn metadata_edits_preserve_unknown_fields_recursively() {
-        let content = "+++\nschema_version = 1\nfuture_flag = true\n\n[entry]\ntags = [\"old\"]\n\n[time]\ncreated_at = \"old\"\nfuture_clock = \"keep\"\n\n[future]\nvalue = 42\n+++\n\n# Body\n";
+        let content = "+++\nschema_version = 1\nfuture_flag = true\n\n[entry]\nfuture_note = \"keep\"\ntags = [\"old\"]\n\n[time]\ncreated_at = \"old\"\nfuture_clock = \"keep\"\n\n[future]\nvalue = 42\n+++\n\n# Body\n";
 
         let updated =
-            with_metadata_fields(content, &[MetadataField::Tags(vec!["new".to_string()])]).unwrap();
+            with_metadata_fields(content, &[MetadataField::People(vec!["new".to_string()])])
+                .unwrap();
 
         let (front_matter, body) = split_front_matter(&updated);
         let raw: toml::Value = toml::from_str(front_matter.unwrap()).unwrap();
         assert_eq!(raw["future_flag"].as_bool(), Some(true));
         assert_eq!(raw["time"]["future_clock"].as_str(), Some("keep"));
         assert_eq!(raw["future"]["value"].as_integer(), Some(42));
-        assert_eq!(raw["entry"]["tags"][0].as_str(), Some("new"));
+        assert_eq!(raw["entry"]["future_note"].as_str(), Some("keep"));
+        assert_eq!(raw["entry"]["people"][0].as_str(), Some("new"));
+        assert!(raw["entry"].get("tags").is_none());
         assert_eq!(body, "\n# Body\n");
     }
 
@@ -853,7 +954,7 @@ mod tests {
         // Unterminated array: parsing fails, so every field falls back to default
         // rather than surfacing the error.
         let fields = front_matter_fields("tags = [\"unterminated\n");
-        assert!(fields.metadata.tags.is_empty());
+        assert!(fields.metadata.people.is_empty());
         assert!(fields.import.is_none());
         assert!(fields.datetime.created_at.is_none());
     }

@@ -35,7 +35,7 @@ monochrome/e-ink terminals.
 - **Fuzzy search** across the whole corpus, including metadata.
 - **Themes** — TOML theme files with flat or bordered chrome, dark/light variants,
   a live-preview picker, and hot reload on edit.
-- **Rich metadata** per entry — tags, people, activities, feelings, a mood score
+- **Rich metadata** per entry — people, activities, feelings, a mood score
   (-5…+5), and a location. Located entries also record the weather, air quality,
   and sun/moon data for that place and time.
 - **Built-in editor** — write and edit entries in a fullscreen editor with markdown

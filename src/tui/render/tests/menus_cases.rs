@@ -43,10 +43,10 @@ fn editor_metadata_menu_registers_row_and_close_regions() {
         draw_app(frame, &mut app, &mut view)
     });
 
-    // Every menu row (tags/people/activities/feelings/mood/location) and the
+    // Every menu row (people/activities/feelings/mood/location) and the
     // close footer must be resolvable through the interaction map — this is
     // what the mouse click path dispatches from.
-    let mut seen = [false; 6];
+    let mut seen = [false; 5];
     let mut close = false;
     for row in 0..area.height {
         for col in 0..area.width {
@@ -54,7 +54,7 @@ fn editor_metadata_menu_registers_row_and_close_regions() {
                 Some(InteractionKind::DialogRow {
                     dialog: DialogId::EditorMetadataMenu,
                     index,
-                }) if *index < 6 => seen[*index] = true,
+                }) if *index < 5 => seen[*index] = true,
                 Some(InteractionKind::Hint(crate::tui::render::HintId::CancelOverlay)) => {
                     close = true
                 }
@@ -62,7 +62,7 @@ fn editor_metadata_menu_registers_row_and_close_regions() {
             }
         }
     }
-    assert_eq!(seen, [true; 6], "all six menu rows registered");
+    assert_eq!(seen, [true; 5], "all five menu rows registered");
     assert!(close, "close footer registered");
 }
 
@@ -119,7 +119,7 @@ fn help_cheatsheet_lists_grouped_bindings() {
     });
     assert!(text.contains("Help"));
     // A bare metadata key the footer does not advertise, plus a grouped label.
-    assert!(text.contains("Tags"));
+    assert!(text.contains("People"));
     assert!(text.contains("Metadata"));
     // The global bindings the trimmed footer dropped still live here.
     assert!(text.contains("Settings"));
@@ -133,7 +133,7 @@ fn help_cheatsheet_lists_grouped_bindings() {
     // The search prefixes are documented on the Search tab, nowhere else. Wide
     // enough for the two-column grid, so the whole tab sits above the fold —
     // at 72 columns it is one column and the last rows need scrolling.
-    let search = render_to_text(100, 44, |frame| {
+    let search = render_to_text(100, 60, |frame| {
         menus::draw_help(
             &theme::Theme::terminal_default(),
             frame,

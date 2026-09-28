@@ -140,7 +140,9 @@ fn imports_entry_with_body_tags_and_provenance() {
     let entry = &entries[0];
     assert_eq!(entry.import.as_ref(), Some(&dayone("ABC123")));
     assert!(entry.body.contains("Hello from Day One"));
-    assert_eq!(entry.tags, vec!["travel", "notes"]);
+    assert!(entry.activities.is_empty());
+    let stored = fs::read_to_string(&entry.path).unwrap();
+    assert!(!stored.contains("tags"));
     // The on-disk date folder comes from the creationDate, not today.
     assert!(entry.path.to_string_lossy().contains("2026"));
 }

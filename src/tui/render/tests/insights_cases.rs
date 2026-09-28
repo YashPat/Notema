@@ -63,9 +63,9 @@ fn app_with_drivers() -> AppModel {
         (5, "people = [\"alex\"]"),
         (5, "people = [\"alex\"]"),
         (5, "people = [\"alex\"]"),
-        (-5, "tags = [\"rain\"]"),
-        (-5, "tags = [\"rain\"]"),
-        (-5, "tags = [\"rain\"]"),
+        (-5, "activities = [\"rain\"]"),
+        (-5, "activities = [\"rain\"]"),
+        (-5, "activities = [\"rain\"]"),
     ];
     for (index, (mood, meta)) in specs.iter().enumerate() {
         let day = index + 1;

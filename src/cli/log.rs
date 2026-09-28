@@ -38,7 +38,7 @@ pub(super) fn run(cli: &Cli, args: &LogArgs, stdin_is_pipe: bool) -> AppResult<(
     timing::mark("log:validate-journal");
 
     // No inline text: compose interactively in the fullscreen built-in editor. Its
-    // own on-screen shortcuts set tags/people/mood and location (Ctrl+L, which
+    // own on-screen shortcuts set people/mood and location (Ctrl+L, which
     // also fetches environment), so the metadata and --location flags apply only
     // to a one-shot logged entry — reject them here rather than silently drop them.
     if !body_from_args && !stdin_is_pipe {
@@ -51,7 +51,6 @@ pub(super) fn run(cli: &Cli, args: &LogArgs, stdin_is_pipe: bool) -> AppResult<(
         return tui::run_compose(config_path, config, store, journal, Metadata::default());
     }
 
-    let tags = comma_separated_values(&args.tag);
     let people = comma_separated_values(&args.person);
     let activities = comma_separated_values(&args.activity);
     let feelings = validate_feelings(
@@ -86,7 +85,6 @@ pub(super) fn run(cli: &Cli, args: &LogArgs, stdin_is_pipe: bool) -> AppResult<(
     };
 
     let metadata = Metadata {
-        tags,
         people,
         activities,
         feelings,
@@ -201,9 +199,7 @@ fn asset_report_message(report: &notema_storage::AssetReport) -> String {
 /// one-shot logged entry; when the command instead opens the fullscreen editor
 /// (no inline text), they have no effect and are reported rather than ignored.
 fn first_interactive_only_flag(args: &LogArgs) -> Option<&'static str> {
-    if !args.tag.is_empty() {
-        Some("--tag")
-    } else if !args.person.is_empty() {
+    if !args.person.is_empty() {
         Some("--person")
     } else if !args.activity.is_empty() {
         Some("--activity")

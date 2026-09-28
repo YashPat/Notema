@@ -22,7 +22,7 @@ pub(crate) fn search_loaded_entries(
 /// only surfaces entries that actually contain the word. Matching is case- and
 /// accent-insensitive.
 ///
-/// Field-specific (`tags:` etc.) filters stay exact and are parsed by the caller,
+/// Field-specific (`activities:` etc.) filters stay exact and are parsed by the caller,
 /// which passes them here as `predicate`; it runs after the scope and encryption
 /// checks. So a query mixing the two intersects them, with the text supplying the
 /// ranking: results are ordered by match quality, ties keeping their incoming
@@ -187,7 +187,6 @@ mod tests {
             activities,
             feelings,
             people,
-            tags,
             mood,
             starred,
             location,
@@ -203,7 +202,6 @@ mod tests {
             activities,
             feelings,
             people,
-            tags,
             mood,
             starred,
             location,
@@ -288,7 +286,7 @@ mod tests {
             "work",
             "nothing relevant",
             Metadata {
-                tags: vec!["project-x".to_string()],
+                activities: vec!["project-x".to_string()],
                 ..Default::default()
             },
         );
@@ -347,7 +345,7 @@ mod tests {
             "work",
             "hello this is a test",
             Metadata {
-                tags: vec!["love".to_string()],
+                people: vec!["love".to_string()],
                 ..Default::default()
             },
         );

@@ -22,8 +22,6 @@ pub struct Metadata {
     pub feelings: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub people: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tags: Vec<String>,
     #[serde(
         default,
         deserialize_with = "deserialize_mood",
@@ -509,7 +507,6 @@ pub struct Entry {
     pub activities: Vec<String>,
     pub feelings: Vec<String>,
     pub people: Vec<String>,
-    pub tags: Vec<String>,
     pub mood: Option<i8>,
     pub starred: bool,
     /// Where the entry was written.
@@ -560,7 +557,6 @@ impl Entry {
             activities: self.activities.clone(),
             feelings: self.feelings.clone(),
             people: self.people.clone(),
-            tags: self.tags.clone(),
             mood: self.mood,
             starred: self.starred,
             location: self.location.clone(),
@@ -592,7 +588,6 @@ pub fn build_search_haystack(content: &str, metadata: &Metadata) -> String {
         .iter()
         .chain(&metadata.feelings)
         .chain(&metadata.people)
-        .chain(&metadata.tags)
     {
         buf.push(' ');
         push_normalized(value, &mut buf);
@@ -666,7 +661,6 @@ pub enum EntryEncryptionState {
 // Not `Eq`: the `Location` payload carries `f64` coordinates.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MetadataField {
-    Tags(Vec<String>),
     People(Vec<String>),
     Activities(Vec<String>),
     Feelings(Vec<String>),

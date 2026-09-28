@@ -54,7 +54,6 @@ pub(crate) enum HintId {
     CancelReaderHints,
     // The per-type metadata editors, each a direct footer chip (and mouse button)
     // for the selected entry.
-    EditTags,
     EditPeople,
     EditActivities,
     EditFeelings,
@@ -594,7 +593,6 @@ fn archive_hint(app: &AppModel) -> Option<Hint> {
 fn selected_entry_action_hints() -> Vec<Hint> {
     vec![
         Hint::new("edit", "e", HintId::EditSelected),
-        Hint::new("tags", "t", HintId::EditTags),
         Hint::new("people", "p", HintId::EditPeople),
         Hint::new("activities", "a", HintId::EditActivities),
         Hint::new("feelings", "f", HintId::EditFeelings),

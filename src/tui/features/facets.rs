@@ -1,9 +1,9 @@
-//! The vocabulary of a scope: every distinct tag, person, activity, feeling and
+//! The vocabulary of a scope: every distinct person, activity, feeling and
 //! place in it, with the number of entries carrying each.
 //!
 //! The filter browser lists these to search by and the search box offers them to
 //! complete with, so both read one set of rows ranked one way. A
-//! tag/person/activity/feeling row launches an exact search for the value it
+//! person/activity/feeling row launches an exact search for the value it
 //! shows, so its count is a [`FacetTally`] taken while walking the entries once —
 //! not a search per row. Place rows keep containment, because a place contains
 //! the places around it, so [`PlaceCounter`] answers them by address instead.
@@ -224,7 +224,6 @@ fn sort_by_count(rows: &mut [FilterRow]) {
 /// are counted by address rather than by value.
 fn facet_values(entry: &Entry, tab: FilterTab) -> Option<&[String]> {
     match tab {
-        FilterTab::Tags => Some(metadata_values(entry, MetadataKind::Tags)),
         FilterTab::People => Some(metadata_values(entry, MetadataKind::People)),
         FilterTab::Activities => Some(metadata_values(entry, MetadataKind::Activities)),
         FilterTab::Feelings => Some(&entry.feelings),
@@ -340,7 +339,6 @@ mod row_tests {
             activities: Vec::new(),
             feelings: Vec::new(),
             people: Vec::new(),
-            tags: Vec::new(),
             mood: None,
             starred: false,
             location: None,
@@ -381,16 +379,15 @@ mod row_tests {
     fn fixture_app() -> AppModel {
         let entries = vec![
             entry("work", |e| {
-                e.tags = strings(&["berlin", "work", "Work"]);
+                e.activities = strings(&["berlin", "work", "Work"]);
                 e.people = strings(&["Alice"]);
-                e.activities = strings(&["coding"]);
                 e.feelings = strings(&["happy"]);
                 e.mood = Some(3);
                 e.starred = true;
                 e.location = Some(place("Berlin", "Germany"));
             }),
             entry("work", |e| {
-                e.tags = strings(&["Berlin", "homework", "work"]);
+                e.activities = strings(&["Berlin", "homework", "work"]);
                 e.feelings = strings(&["happy", "calm"]);
                 e.mood = Some(3);
                 e.location = Some(place("Berlin", "Germany"));
@@ -398,9 +395,9 @@ mod row_tests {
             entry("trips", |e| {
                 // Values holding characters the query parser reads as structure,
                 // plus one whose whitespace is part of the value.
-                e.tags = strings(&["berlin", "c++", "kreuzberg; mitte", "say \"hi\"", " work "]);
+                e.activities =
+                    strings(&["berlin", "c++", "kreuzberg; mitte", "say \"hi\"", " work "]);
                 e.people = strings(&["alice", "Bob"]);
-                e.activities = strings(&["hiking", "r&d|ops", "a\";b"]);
                 e.feelings = strings(&["calm", "unhappy"]);
                 e.mood = Some(-2);
                 e.starred = true;
@@ -424,7 +421,7 @@ mod row_tests {
             }),
             entry("work", |e| {
                 e.encryption_state = EntryEncryptionState::EncryptedLocked;
-                e.tags = strings(&["secret"]);
+                e.activities = strings(&["secret"]);
                 e.mood = Some(5);
                 e.location = Some(place("Hidden", "Nowhere"));
             }),
@@ -466,7 +463,7 @@ mod row_tests {
     #[test]
     fn all_journals_scope_counts_across_journals() {
         let app = fixture_app();
-        let tags = app.filter_rows(&SearchScope::AllJournals, FilterTab::Tags);
+        let tags = app.filter_rows(&SearchScope::AllJournals, FilterTab::Activities);
         // "berlin" is tagged on all three unlocked entries (two journals), folding
         // "Berlin"/"berlin" together; the most-frequent lowercase form wins.
         let berlin = tags
@@ -497,7 +494,7 @@ mod row_tests {
     fn a_row_counts_its_value_and_not_the_ones_holding_it() {
         let mut app = fixture_app();
         let scope = SearchScope::AllJournals;
-        let rows = app.filter_rows(&scope, FilterTab::Tags);
+        let rows = app.filter_rows(&scope, FilterTab::Activities);
         let count_of = |label: &str| {
             rows.iter()
                 .find(|r| r.label == label)
@@ -515,7 +512,7 @@ mod row_tests {
         // results narrowing while it is being typed. It reaches all three unlocked
         // entries, where the `work` row reaches two.
         app.search.scope = scope.clone();
-        app.search.query.set_text("tags:work");
+        app.search.query.set_text("activities:work");
         assert_eq!(app.search_results().len(), 3);
     }
 
@@ -546,7 +543,7 @@ mod row_tests {
     #[test]
     fn a_case_pair_is_one_row_and_an_entry_holding_both_counts_once() {
         let app = fixture_app();
-        let rows = app.filter_rows(&SearchScope::AllJournals, FilterTab::Tags);
+        let rows = app.filter_rows(&SearchScope::AllJournals, FilterTab::Activities);
         // `Work` and `work` fold together, and the most-used casing labels the row.
         let work: Vec<&FilterRow> = rows
             .iter()
@@ -563,8 +560,8 @@ mod row_tests {
     #[test]
     fn a_value_that_folds_to_nothing_gets_no_row() {
         let mut app = crate::tui::test_support::app_with_journals(&[]);
-        app.library.entries = vec![entry("work", |e| e.tags = strings(&["", "work"]))];
-        let rows = app.filter_rows(&SearchScope::AllJournals, FilterTab::Tags);
+        app.library.entries = vec![entry("work", |e| e.activities = strings(&["", "work"]))];
+        let rows = app.filter_rows(&SearchScope::AllJournals, FilterTab::Activities);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].label, "work");
     }
@@ -575,15 +572,20 @@ mod row_tests {
     fn a_non_ascii_case_pair_is_one_row() {
         let mut app = crate::tui::test_support::app_with_journals(&[]);
         app.library.entries = vec![
-            entry("work", |e| e.tags = strings(&["Ärger"])),
-            entry("work", |e| e.tags = strings(&["ärger"])),
+            entry("work", |e| e.activities = strings(&["Ärger"])),
+            entry("work", |e| e.activities = strings(&["ärger"])),
         ];
         let scope = SearchScope::AllJournals;
-        let rows = app.filter_rows(&scope, FilterTab::Tags);
+        let rows = app.filter_rows(&scope, FilterTab::Activities);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].count, 2);
         assert_eq!(
-            search_count(&mut app, &scope, FilterTab::Tags, &rows[0].search_value),
+            search_count(
+                &mut app,
+                &scope,
+                FilterTab::Activities,
+                &rows[0].search_value
+            ),
             2
         );
     }

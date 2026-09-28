@@ -1,11 +1,11 @@
 //! Styling for the search field's own text.
 //!
 //! The query box holds a small language. These spans colour what the parser
-//! *recognised*, so a mistyped `tag:` is distinguishable from a working `tags:`
+//! *recognised*, so a mistyped `tag:` is distinguishable from a working `activities:`
 //! while typing rather than only once the results come back.
 //!
 //! A quoted facet value draws as a pill. The chip is not a new kind of thing in
-//! the query — it is how `tags:"apple"` looks — so the render stays a function
+//! the query — it is how `activities:"apple"` looks — so the render stays a function
 //! of the text alone: delete either quote and the pill dissolves.
 //!
 //! Output is `(start_byte, end_byte, Style)` for `TextArea::set_syntax_spans`
@@ -98,7 +98,6 @@ pub(super) fn query_styling(theme: &Theme, query: &str) -> QueryStyling {
 /// so a pill there would claim a precision the predicate does not have.
 fn pill_category(prefix: Prefix) -> Option<PillCategory> {
     match prefix {
-        Prefix::Tags => Some(PillCategory::Tags),
         Prefix::People => Some(PillCategory::People),
         Prefix::Activities => Some(PillCategory::Activities),
         Prefix::Feelings => Some(PillCategory::Feelings),
@@ -148,7 +147,7 @@ mod tests {
     #[test]
     fn a_recognised_prefix_is_styled_and_a_mistyped_one_is_not() {
         let theme = coloured();
-        assert_eq!(styled(&theme, "tags:work"), vec!["tags:"]);
+        assert_eq!(styled(&theme, "activities:work"), vec!["activities:"]);
         // The whole point: one `s` short, and nothing lights up.
         assert!(styled(&theme, "tag:work").is_empty());
         assert!(styled(&theme, "Tags:work").is_empty());
@@ -158,8 +157,8 @@ mod tests {
     fn operators_and_separators_are_styled_under_a_prefix() {
         let theme = coloured();
         assert_eq!(
-            styled(&theme, "tags:a+b|c; people:d"),
-            vec!["tags:", "+", "|", ";", "people:"]
+            styled(&theme, "activities:a+b|c; people:d"),
+            vec!["activities:", "+", "|", ";", "people:"]
         );
         // In full text the same characters are just characters.
         assert!(styled(&theme, "a+b|c").is_empty());
@@ -170,13 +169,16 @@ mod tests {
         // The `+` is inside the value, so it is a character rather than an
         // operator — the whole quoted run is one pill, and nothing splits it.
         assert_eq!(
-            styled(&coloured(), "tags:\"a+b\""),
-            vec!["tags:", "\"a+b\""]
+            styled(&coloured(), "activities:\"a+b\""),
+            vec!["activities:", "\"a+b\""]
         );
         // A bracket theme carries the pill in its glyphs and has no syntax
         // palette, so it marks only the prefix — the `+` inside the quoted value
         // is still never an operator span.
-        assert_eq!(styled(&bracket(), "tags:\"a+b\""), vec!["tags:"]);
+        assert_eq!(
+            styled(&bracket(), "activities:\"a+b\""),
+            vec!["activities:"]
+        );
     }
 
     /// The style each grammar slice of `query` carries, in text order.
@@ -196,10 +198,10 @@ mod tests {
         // a foreground — the field's own ink shows through.
         let plain = Theme::terminal_default();
         assert_eq!(
-            grammar(&plain, "tags:a+b; x"),
+            grammar(&plain, "activities:a+b; x"),
             vec![
                 (
-                    "tags:".to_string(),
+                    "activities:".to_string(),
                     Style::new().add_modifier(Modifier::BOLD)
                 ),
                 ("+".to_string(), Style::new().add_modifier(Modifier::DIM)),
@@ -208,7 +210,7 @@ mod tests {
         );
         // Pills are not syntax colour, so they survive on a plain theme — as
         // reversed text, exactly as the reader draws a chip there.
-        assert!(!query_styling(&plain, "tags:\"a\"").spans.is_empty());
+        assert!(!query_styling(&plain, "activities:\"a\"").spans.is_empty());
     }
 
     /// The end of the chain: the monochrome styles survive the widget and land on
@@ -220,7 +222,7 @@ mod tests {
         use ratatui::{Terminal, backend::TestBackend};
 
         let theme = Theme::terminal_default();
-        let mut input = TextInput::from("tags:a+b; x".to_string());
+        let mut input = TextInput::from("activities:a+b; x".to_string());
         let spans = query_styling(&theme, input.as_str()).spans;
         input.set_syntax_spans(vec![spans]);
 
@@ -230,14 +232,14 @@ mod tests {
         let buffer = term.backend().buffer();
         let modifier = |col: u16| buffer[(col, 0u16)].modifier;
 
-        // `tags:` is bold; the connective `+` and `;` are dim; the value is neither.
-        for col in 0..=4 {
+        // `activities:` is bold; the connective `+` and `;` are dim; the value is neither.
+        for col in 0..=10 {
             assert!(modifier(col).contains(Modifier::BOLD), "col {col} bold");
             assert!(!modifier(col).contains(Modifier::DIM), "col {col} not dim");
         }
-        assert!(modifier(6).contains(Modifier::DIM), "+ dim"); // the `+`
-        assert!(modifier(8).contains(Modifier::DIM), "; dim"); // the `;`
-        for col in [5u16, 7, 10] {
+        assert!(modifier(12).contains(Modifier::DIM), "+ dim"); // the `+`
+        assert!(modifier(14).contains(Modifier::DIM), "; dim"); // the `;`
+        for col in [11u16, 13, 16] {
             let m = modifier(col);
             assert!(
                 !m.contains(Modifier::BOLD) && !m.contains(Modifier::DIM),
@@ -251,7 +253,7 @@ mod tests {
         // The dim/bold-only fallback is the unset-colour branch only: a theme that
         // colours these categories keeps its exact look, so the connective spans
         // carry no dim.
-        for (_, style) in grammar(&coloured(), "tags:a+b|c; x") {
+        for (_, style) in grammar(&coloured(), "activities:a+b|c; x") {
             assert!(!style.add_modifier.contains(Modifier::DIM));
         }
     }
@@ -259,22 +261,25 @@ mod tests {
     #[test]
     fn a_balanced_quoted_facet_value_draws_as_a_pill() {
         let theme = bracket();
-        assert_eq!(drawn(&theme, "tags:\"apple\""), "tags:[apple]");
+        assert_eq!(drawn(&theme, "activities:\"apple\""), "activities:[apple]");
         assert_eq!(
-            drawn(&theme, "tags:\"apple\"+\"banana\""),
-            "tags:[apple]+[banana]"
+            drawn(&theme, "activities:\"apple\"+\"banana\""),
+            "activities:[apple]+[banana]"
         );
         // Under the default look the delimiters go blank and the run inverts.
-        assert_eq!(drawn(&Theme::terminal_default(), "tags:\"a\""), "tags: a ");
+        assert_eq!(
+            drawn(&Theme::terminal_default(), "activities:\"a\""),
+            "activities: a "
+        );
     }
 
     /// Both directions of the transition, with no state anywhere but the text.
     #[test]
     fn deleting_either_delimiter_brings_the_quote_back() {
         let theme = bracket();
-        assert_eq!(drawn(&theme, "tags:\"apple"), "tags:\"apple");
-        assert_eq!(drawn(&theme, "tags:apple\""), "tags:apple\"");
-        assert_eq!(drawn(&theme, "tags:\"apple\""), "tags:[apple]");
+        assert_eq!(drawn(&theme, "activities:\"apple"), "activities:\"apple");
+        assert_eq!(drawn(&theme, "activities:apple\""), "activities:apple\"");
+        assert_eq!(drawn(&theme, "activities:\"apple\""), "activities:[apple]");
     }
 
     /// The pill's reach is the parser's reach. Deleting apple's closing quote
@@ -283,8 +288,8 @@ mod tests {
     #[test]
     fn an_unbalanced_quote_draws_one_pill_over_the_operator() {
         assert_eq!(
-            drawn(&bracket(), "tags:\"apple+\"banana\""),
-            "tags:[apple+\"banana]"
+            drawn(&bracket(), "activities:\"apple+\"banana\""),
+            "activities:[apple+\"banana]"
         );
     }
 
@@ -317,8 +322,8 @@ mod tests {
         // Only the outer pair is a delimiter. Reclaiming the inner column would
         // be the width remapping this whole design avoids.
         assert_eq!(
-            drawn(&bracket(), "tags:\"say \"\"hi\"\"\""),
-            "tags:[say \"\"hi\"\"]"
+            drawn(&bracket(), "activities:\"say \"\"hi\"\"\""),
+            "activities:[say \"\"hi\"\"]"
         );
     }
 
@@ -330,13 +335,13 @@ mod tests {
         use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
         let theme = bracket();
-        let mut input = TextInput::from("tags:\"apple\"".to_string());
+        let mut input = TextInput::from("people:\"apple\"".to_string());
         assert_eq!(query_styling(&theme, input.as_str()).substitutions.len(), 2);
 
         // A word delete at the chip's right edge takes the closing quote alone,
         // and the pill dissolves rather than the key being swallowed.
         input.input(KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL));
-        assert_eq!(input.as_str(), "tags:\"apple");
+        assert_eq!(input.as_str(), "people:\"apple");
         assert!(
             query_styling(&theme, input.as_str())
                 .substitutions
@@ -345,10 +350,10 @@ mod tests {
 
         // Double-click inside the value grabs it without its delimiters, so the
         // natural "replace this chip" gesture keeps the chip.
-        let mut input = TextInput::from("tags:\"apple\"".to_string());
-        input.select_word_at(8);
+        let mut input = TextInput::from("people:\"apple\"".to_string());
+        input.select_word_at(10);
         let (start, end) = input.selection_range().expect("a word is selected");
-        assert_eq!((start.1, end.1), (6, 11));
+        assert_eq!((start.1, end.1), (8, 13));
     }
 
     /// No launched row leaves a bare `"` on screen: the four facets quote and
@@ -375,9 +380,9 @@ mod tests {
     #[test]
     fn a_multibyte_value_substitutes_only_its_delimiters() {
         let theme = bracket();
-        assert_eq!(drawn(&theme, "tags:\"Ärger\""), "tags:[Ärger]");
-        for (offset, _) in query_styling(&theme, "tags:\"Ärger\"").substitutions {
-            assert_eq!(&"tags:\"Ärger\""[offset..offset + 1], "\"");
+        assert_eq!(drawn(&theme, "activities:\"Ärger\""), "activities:[Ärger]");
+        for (offset, _) in query_styling(&theme, "activities:\"Ärger\"").substitutions {
+            assert_eq!(&"activities:\"Ärger\""[offset..offset + 1], "\"");
         }
     }
 }

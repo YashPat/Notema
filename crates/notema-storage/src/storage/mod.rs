@@ -15,8 +15,8 @@ pub use entry::{
     EntryEdit, EntryEditOutcome,
 };
 pub(crate) use entry::{
-    EntryCodec, collect_discovered_entries_with_progress, collect_entry_paths, create_entry,
-    create_entry_copy, delete_empty_entry, delete_journal, is_encrypted_entry_file,
+    EntryCodec, StampEffect, collect_discovered_entries_with_progress, collect_entry_paths,
+    create_entry, create_entry_copy, delete_empty_entry, delete_journal, is_encrypted_entry_file,
     is_plain_entry_file, move_entry_to_trash, random_id, read_entries, read_entries_with_progress,
     read_entry, read_entry_content, read_entry_with_revision, save_entry_edit_if_revision,
     scan_import_sources,

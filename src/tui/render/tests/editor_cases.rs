@@ -179,7 +179,6 @@ fn pinned_and_scrolling_mood_rows_agree_on_a_narrow_pane() {
 fn reader_and_editor_frame_the_body_the_same() {
     let theme = theme::Theme::terminal_default();
     let metadata = notema_domain::Metadata {
-        tags: vec!["one".to_string()],
         mood: Some(2),
         ..Default::default()
     };
@@ -224,7 +223,6 @@ fn reader_and_editor_frame_the_body_the_same() {
 fn top_padding_outranks_centering_on_a_long_body() {
     let theme = theme::Theme::terminal_default();
     let metadata = notema_domain::Metadata {
-        tags: vec!["one".to_string()],
         mood: Some(2),
         ..Default::default()
     };

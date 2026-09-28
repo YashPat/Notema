@@ -1,4 +1,4 @@
-//! Per-value correlations: for each person, activity, and tag, how often it
+//! Per-value correlations: for each person and activity, how often it
 //! appears, the mood logged alongside it, its dominant feeling, and how far its
 //! mood sits from the journal's overall average ("what lifts / drains you").
 
@@ -14,7 +14,7 @@ use notema_domain::Entry;
 
 use crate::sort_by_count_desc;
 
-/// A person, activity, or tag with its co-occurring mood and feeling.
+/// A person or activity with its co-occurring mood and feeling.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Correlation {
     pub name: String,
@@ -38,7 +38,6 @@ pub struct Correlation {
 pub struct Correlations {
     pub people: Vec<Correlation>,
     pub activities: Vec<Correlation>,
-    pub tags: Vec<Correlation>,
     /// Feelings treated as a correlated dimension: each feeling's co-occurring
     /// mood, so a mood ranking answers "which feeling rides with my best/worst
     /// mood". `top_feelings` here is usually the feeling itself and is unused.
@@ -63,7 +62,6 @@ struct Acc {
 pub fn build_correlations(entries: &[&Entry]) -> Correlations {
     let mut people: HashMap<String, Acc> = HashMap::new();
     let mut activities: HashMap<String, Acc> = HashMap::new();
-    let mut tags: HashMap<String, Acc> = HashMap::new();
     let mut feelings: HashMap<String, Acc> = HashMap::new();
     let mut mood_sum: i64 = 0;
     let mut mood_count: usize = 0;
@@ -71,7 +69,6 @@ pub fn build_correlations(entries: &[&Entry]) -> Correlations {
     for entry in entries {
         accumulate(&mut people, &entry.people, entry, false);
         accumulate(&mut activities, &entry.activities, entry, false);
-        accumulate(&mut tags, &entry.tags, entry, false);
         // The feelings dimension excludes each feeling from its own associated
         // list, so `top_feelings` reads as "often logged *together* with this one".
         accumulate(&mut feelings, &entry.feelings, entry, true);
@@ -85,7 +82,6 @@ pub fn build_correlations(entries: &[&Entry]) -> Correlations {
     Correlations {
         people: finish(people, overall_mean),
         activities: finish(activities, overall_mean),
-        tags: finish(tags, overall_mean),
         feelings: finish(feelings, overall_mean),
     }
 }

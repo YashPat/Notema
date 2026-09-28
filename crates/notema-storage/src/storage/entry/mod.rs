@@ -30,7 +30,7 @@ pub(super) use paths::entry_path;
 pub use paths::{entry_id, is_entry_file};
 pub(crate) use paths::{is_encrypted_entry_file, is_plain_entry_file, random_id};
 pub(crate) use read::{
-    collect_discovered_entries_with_progress, collect_entry_paths, read_entries,
+    StampEffect, collect_discovered_entries_with_progress, collect_entry_paths, read_entries,
     read_entries_with_progress, read_entry, read_entry_content, read_entry_with_revision,
     scan_import_sources,
 };

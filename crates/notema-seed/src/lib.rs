@@ -56,24 +56,6 @@ fn valence_from_mood(mood: i8) -> Valence {
     }
 }
 
-const TAGS: &[&str] = &[
-    "work",
-    "home",
-    "travel",
-    "health",
-    "reading",
-    "coding",
-    "family",
-    "ideas",
-    "gratitude",
-    "fitness",
-    "music",
-    "cooking",
-    "garden",
-    "finance",
-    "learning",
-];
-
 const PEOPLE: &[&str] = &[
     "Alice", "Bob", "Carla", "David", "Emma", "Frank", "Grace", "Hana", "Ivan", "Julia",
 ];
@@ -332,7 +314,6 @@ fn random_metadata(
         .map(str::to_string)
         .collect();
     Metadata {
-        tags: sample(rng, TAGS, 0, 3),
         people: sample(rng, PEOPLE, 0, 2),
         activities: sample(rng, ACTIVITIES, 0, 2),
         feelings,

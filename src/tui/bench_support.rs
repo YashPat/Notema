@@ -164,7 +164,6 @@ pub fn filter_tab_rows(app: &BenchApp, tab: usize) -> (&'static str, usize) {
 pub fn open_metadata_picker(app: &mut BenchApp, kind: usize) -> (&'static str, usize) {
     let kind = metadata_kind(kind);
     match kind {
-        MetadataKind::Tags => app.0.begin_edit_tags(),
         MetadataKind::People => app.0.begin_edit_people(),
         MetadataKind::Activities => app.0.begin_edit_activities(),
     }
@@ -219,7 +218,7 @@ pub fn insights_analytics(app: &mut BenchApp) -> usize {
     app.0.nav.insights_scope = InsightsScope::All;
     app.0
         .cached_analytics()
-        .map_or(0, |analytics| analytics.correlations.tags.len())
+        .map_or(0, |analytics| analytics.correlations.activities.len())
 }
 
 /// The memoized windowed correlations behind the Drivers tab, likewise on a hit.
@@ -231,7 +230,7 @@ pub fn insights_drivers(app: &mut BenchApp) -> usize {
     app.0.nav.insights_scope = InsightsScope::All;
     app.0
         .cached_windowed_correlations()
-        .map_or(0, |correlations| correlations.tags.len())
+        .map_or(0, |correlations| correlations.activities.len())
 }
 
 /// A reusable `TestBackend` terminal for [`editor_input`], built once so a
@@ -371,7 +370,7 @@ fn narrow_entry_text(index: usize) -> String {
         "+++\n\
          schema_version = 1\n\n\
          [entry]\n\
-         tags = [\"tag-{}\", \"tag-{}\"]\n\
+         people = [\"tag-{}\", \"tag-{}\"]\n\
          people = [\"person-{}\"]\n\
          activities = [\"activity-{}\"]\n\
          mood = {}\n\n\
@@ -417,7 +416,7 @@ fn wide_entry_text(index: usize, count: usize, vocabulary: &[&'static str]) -> S
         "+++\n\
          schema_version = 1\n\n\
          [entry]\n\
-         tags = [\"tag-{}\", \"topic-{}\"]\n\
+         people = [\"tag-{}\", \"topic-{}\"]\n\
          people = [\"person-{}\", \"contact-{}\"]\n\
          activities = [\"activity-{}\"]\n\
          feelings = [\"{}\", \"{}\"]\n\

@@ -1,4 +1,4 @@
-//! The Drivers tab: people, activities, and tags merged into one ranking of
+//! The Drivers tab: people and activities merged into one ranking of
 //! what lifts vs. drains your mood. The strongest lifts come first (mood well
 //! above your average), then the strongest drains (well below) — the single
 //! screen that answers "what moves my mood". Rendered through the shared
@@ -16,7 +16,6 @@ pub(super) fn rows(correlations: &Correlations) -> Vec<Correlation> {
         .people
         .iter()
         .chain(&correlations.activities)
-        .chain(&correlations.tags)
         .filter(|correlate| correlate.count >= MIN_CORRELATION_COUNT)
         .cloned()
         .collect();

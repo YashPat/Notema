@@ -40,7 +40,6 @@ fn ensure_pixel_row_visible(
 /// The selected entry's metadata lists, owned so a caller can hold one
 /// assembly and borrow it as [`crate::tui::render::EntryMetadataValues`].
 pub(crate) struct SelectedEntryMetadata {
-    tags: Vec<String>,
     people: Vec<String>,
     activities: Vec<String>,
     feelings: Vec<String>,
@@ -51,7 +50,6 @@ pub(crate) struct SelectedEntryMetadata {
 impl SelectedEntryMetadata {
     pub(crate) fn values(&self) -> crate::tui::render::EntryMetadataValues<'_> {
         crate::tui::render::EntryMetadataValues {
-            tags: &self.tags,
             people: &self.people,
             activities: &self.activities,
             feelings: &self.feelings,
@@ -473,10 +471,6 @@ impl AppModel {
         })
     }
 
-    pub(crate) fn selected_entry_tags(&self) -> Vec<String> {
-        self.selected_entry_metadata(MetadataKind::Tags)
-    }
-
     pub(crate) fn selected_entry_people(&self) -> Vec<String> {
         self.selected_entry_metadata(MetadataKind::People)
     }
@@ -521,7 +515,6 @@ impl AppModel {
     /// along or every chip's hit region lands on the wrong row.
     pub(crate) fn selected_entry_metadata_values(&self) -> SelectedEntryMetadata {
         SelectedEntryMetadata {
-            tags: self.selected_entry_tags(),
             people: self.selected_entry_people(),
             activities: self.selected_entry_activities(),
             feelings: self.selected_entry_feelings(),

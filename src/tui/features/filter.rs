@@ -1,5 +1,5 @@
 //! The filter browser: a tabbed overlay that lists every distinct
-//! tag/person/activity/feeling/place value in scope with its post
+//! person/activity/feeling/place value in scope with its post
 //! count, and launches a filtered search on the chosen row.
 //!
 //! Scope is captured when the dialog opens — all journals from the journals
@@ -25,7 +25,6 @@ use crate::tui::state::{ListNav, Overlay, SelectableList};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum FilterTab {
     #[default]
-    Tags,
     People,
     Activities,
     Feelings,
@@ -33,8 +32,7 @@ pub(crate) enum FilterTab {
 }
 
 impl FilterTab {
-    pub(crate) const ALL: [FilterTab; 5] = [
-        Self::Tags,
+    pub(crate) const ALL: [FilterTab; 4] = [
         Self::People,
         Self::Activities,
         Self::Feelings,
@@ -46,20 +44,18 @@ impl FilterTab {
 
     /// This tab's slot in a `[_; COUNT]` keyed by tab — the facet arrays are
     /// indexed by it, so it is spelt out here rather than found by scanning
-    /// `ALL` through a rendering trait whose miss would silently answer `Tags`.
+    /// `ALL`.
     pub(crate) fn index(self) -> usize {
         match self {
-            Self::Tags => 0,
-            Self::People => 1,
-            Self::Activities => 2,
-            Self::Feelings => 3,
-            Self::Locations => 4,
+            Self::People => 0,
+            Self::Activities => 1,
+            Self::Feelings => 2,
+            Self::Locations => 3,
         }
     }
 
     pub(crate) fn title(self) -> &'static str {
         match self {
-            Self::Tags => "Tags",
             Self::People => "People",
             Self::Activities => "Activities",
             Self::Feelings => "Feelings",
@@ -70,7 +66,6 @@ impl FilterTab {
     /// A shorter label used when the full titles won't fit the tab strip.
     pub(crate) fn short_title(self) -> &'static str {
         match self {
-            Self::Tags => "Tags",
             Self::People => "Ppl",
             Self::Activities => "Acts",
             Self::Feelings => "Feel",
@@ -82,7 +77,6 @@ impl FilterTab {
     /// every tab stays visible and clickable on the tightest layout.
     pub(crate) fn initial(self) -> &'static str {
         match self {
-            Self::Tags => "T",
             Self::People => "P",
             Self::Activities => "A",
             Self::Feelings => "F",
@@ -90,11 +84,10 @@ impl FilterTab {
         }
     }
 
-    /// The search prefix a chosen row launches, colon included (`tags:`,
+    /// The search prefix a chosen row launches, colon included (`people:`,
     /// `location:`, …).
     pub(crate) fn search_prefix(self) -> &'static str {
         match self {
-            Self::Tags => Prefix::Tags,
             Self::People => Prefix::People,
             Self::Activities => Prefix::Activities,
             Self::Feelings => Prefix::Feelings,
@@ -108,7 +101,6 @@ impl FilterTab {
     /// chosen.
     pub(crate) fn from_prefix(prefix: Prefix) -> Option<Self> {
         match prefix {
-            Prefix::Tags => Some(Self::Tags),
             Prefix::People => Some(Self::People),
             Prefix::Activities => Some(Self::Activities),
             Prefix::Feelings => Some(Self::Feelings),

@@ -72,17 +72,17 @@ fn metadata_partitioned_excludes_archived_and_isolates_archived_only() {
     fs::create_dir_all(&archived_dir).unwrap();
     fs::write(
         active_dir.join("a.md"),
-        "+++\nschema_version = 1\n\n[entry]\ntags = [\"berlin\", \"shared\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\n# A\n",
+        "+++\nschema_version = 1\n\n[entry]\npeople = [\"berlin\", \"shared\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\n# A\n",
     )
     .unwrap();
     fs::write(
         archived_dir.join("b.md"),
-        "+++\nschema_version = 1\n\n[entry]\ntags = [\"wanderlust\", \"shared\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\n# B\n",
+        "+++\nschema_version = 1\n\n[entry]\npeople = [\"wanderlust\", \"shared\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\n# B\n",
     )
     .unwrap();
 
     let app = new_app(Config::new(dir.path().to_path_buf()));
-    let (active, archived_only) = app.metadata_partitioned(MetadataKind::Tags);
+    let (active, archived_only) = app.metadata_partitioned(MetadataKind::People);
 
     let active_tags: Vec<&str> = active.iter().map(|(t, _)| t.as_str()).collect();
     assert!(active_tags.contains(&"berlin"));

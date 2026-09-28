@@ -133,9 +133,9 @@ pub(crate) struct Caret {
 ///
 /// The caret is placed by the alternative's untrimmed span, matched inclusively
 /// at both ends: it sits just past the last character for all of typing, and the
-/// whitespace in `tags: apple` is part of the value being typed rather than a
+/// whitespace in `people: apple` is part of the value being typed rather than a
 /// gap between values. Under a prefix there is always at least one alternative
-/// (a bare `tags:` yields an empty one at the value start), so an empty value
+/// (a bare `people:` yields an empty one at the value start), so an empty value
 /// needs no special case.
 pub(crate) fn caret_context(query: &str, at: usize) -> Option<Caret> {
     let segment = scan(query)
@@ -200,13 +200,13 @@ mod tests {
     #[test]
     fn a_prefixed_segment_splits_into_alternatives() {
         assert_eq!(
-            parts("tags:work"),
-            vec![(Some("tags:"), vec![], vec![("work", false)])]
+            parts("people:work"),
+            vec![(Some("people:"), vec![], vec![("work", false)])]
         );
         assert_eq!(
-            parts("tags:a+b|c"),
+            parts("people:a+b|c"),
             vec![(
-                Some("tags:"),
+                Some("people:"),
                 vec!['+', '|'],
                 vec![("a", false), ("b", false), ("c", false)]
             )]
@@ -219,10 +219,10 @@ mod tests {
         // characters, and drawing them as operators would say otherwise.
         assert_eq!(parts("beach+sun"), vec![(None, vec![], vec![])]);
         assert_eq!(
-            parts("beach; tags:x"),
+            parts("beach; people:x"),
             vec![
                 (None, vec![], vec![]),
-                (Some("tags:"), vec![], vec![("x", false)]),
+                (Some("people:"), vec![], vec![("x", false)]),
             ]
         );
     }
@@ -232,17 +232,17 @@ mod tests {
         // The range covers the quotes: they are the alternative's own bytes, and
         // the field decides how to draw them.
         assert_eq!(
-            parts("tags:\"apple\"+\"banana\""),
+            parts("people:\"apple\"+\"banana\""),
             vec![(
-                Some("tags:"),
+                Some("people:"),
                 vec!['+'],
                 vec![("\"apple\"", true), ("\"banana\"", true)]
             )]
         );
         // Half-typed, and unbalanced: not a pair, so not exact.
         assert_eq!(
-            parts("tags:\"app"),
-            vec![(Some("tags:"), vec![], vec![("\"app", false)])]
+            parts("people:\"app"),
+            vec![(Some("people:"), vec![], vec![("\"app", false)])]
         );
     }
 
@@ -252,21 +252,21 @@ mod tests {
     #[test]
     fn an_unbalanced_quote_swallows_the_operator_after_it() {
         assert_eq!(
-            parts("tags:\"apple+\"banana\""),
-            vec![(Some("tags:"), vec![], vec![("\"apple+\"banana\"", true)])]
+            parts("people:\"apple+\"banana\""),
+            vec![(Some("people:"), vec![], vec![("\"apple+\"banana\"", true)])]
         );
     }
 
     #[test]
     fn a_structural_character_inside_quotes_is_not_a_separator() {
         assert_eq!(
-            parts("tags:\"a;b\""),
-            vec![(Some("tags:"), vec![], vec![("\"a;b\"", true)])]
+            parts("people:\"a;b\""),
+            vec![(Some("people:"), vec![], vec![("\"a;b\"", true)])]
         );
         assert_eq!(
-            parts("tags:\"a+b\"|c"),
+            parts("people:\"a+b\"|c"),
             vec![(
-                Some("tags:"),
+                Some("people:"),
                 vec!['|'],
                 vec![("\"a+b\"", true), ("c", false)]
             )]
@@ -275,31 +275,31 @@ mod tests {
 
     #[test]
     fn whitespace_is_trimmed_off_the_located_ranges() {
-        let query = "  tags: a | b  ";
+        let query = "  people: a | b  ";
         assert_eq!(
             parts(query),
-            vec![(Some("tags:"), vec!['|'], vec![("a", false), ("b", false)])]
+            vec![(Some("people:"), vec!['|'], vec![("a", false), ("b", false)])]
         );
         // A wholly empty value locates one empty alternative rather than none.
         assert_eq!(
-            parts("tags:  "),
-            vec![(Some("tags:"), vec![], vec![("", false)])]
+            parts("people:  "),
+            vec![(Some("people:"), vec![], vec![("", false)])]
         );
     }
 
     #[test]
     fn separators_point_at_the_semicolons() {
-        let query = "tags:x; people:y";
+        let query = "people:x; people:y";
         let segments = scan(query);
         assert_eq!(segments.len(), 2);
-        assert_eq!(segments[0].separator, Some(6));
-        assert_eq!(&query[6..7], ";");
+        assert_eq!(segments[0].separator, Some(8));
+        assert_eq!(&query[8..9], ";");
         assert_eq!(segments[1].separator, None);
     }
 
     #[test]
     fn operator_offsets_point_at_the_operators() {
-        let query = "tags:a+b|c";
+        let query = "people:a+b|c";
         let segment = &scan(query)[0];
         for &(operator, offset) in &segment.operators {
             assert_eq!(query[offset..].chars().next(), Some(operator));
@@ -330,8 +330,8 @@ mod tests {
         assert_eq!(alternatives("mood:3|4"), vec!["3|4"]);
 
         // The token facets are unchanged: `+` groups, `|` alternates.
-        let segment = &scan("tags:a+b|c")[0];
-        assert_eq!(segment.operators, vec![('+', 6), ('|', 8)]);
+        let segment = &scan("people:a+b|c")[0];
+        assert_eq!(segment.operators, vec![('+', 8), ('|', 10)]);
     }
 
     /// The value the caret is in, as `(text, quoted)`.
@@ -345,29 +345,29 @@ mod tests {
     fn the_caret_finds_the_value_it_is_extending() {
         // Just after the prefix: an empty value, which is what opens the list on
         // the whole vocabulary.
-        assert_eq!(at("tags:", 5), Some(("", false)));
+        assert_eq!(at("people:", 7), Some(("", false)));
         // Mid-value and at its end — the position for all of typing.
-        assert_eq!(at("tags:app", 6), Some(("app", false)));
-        assert_eq!(at("tags:app", 8), Some(("app", false)));
+        assert_eq!(at("people:app", 8), Some(("app", false)));
+        assert_eq!(at("people:app", 10), Some(("app", false)));
         // Whitespace after the prefix is not part of the value.
-        assert_eq!(at("tags: app", 9), Some(("app", false)));
+        assert_eq!(at("people: app", 11), Some(("app", false)));
         // But a caret in that whitespace is still in the value being typed —
         // pressing space must not take the completions away.
-        assert_eq!(at("tags: ", 6), Some(("", false)));
-        assert_eq!(at("tags:app ", 9), Some(("app", false)));
-        assert_eq!(at("tags:a | ", 9), Some(("", false)));
+        assert_eq!(at("people: ", 8), Some(("", false)));
+        assert_eq!(at("people:app ", 11), Some(("app", false)));
+        assert_eq!(at("people:a | ", 11), Some(("", false)));
 
         // A committed value: the caret lands past the closing quote and the pair
         // is balanced, which is what tells the list to stay shut.
-        assert_eq!(at("tags:\"apple\"", 12), Some(("\"apple\"", true)));
+        assert_eq!(at("people:\"apple\"", 14), Some(("\"apple\"", true)));
         // Break the pair and it is an ordinary fragment again.
-        assert_eq!(at("tags:\"apple", 11), Some(("\"apple", false)));
+        assert_eq!(at("people:\"apple", 13), Some(("\"apple", false)));
 
         // Between two alternatives, each side belongs to the value it touches.
-        assert_eq!(at("tags:a|b", 6), Some(("a", false)));
-        assert_eq!(at("tags:a|b", 7), Some(("b", false)));
+        assert_eq!(at("people:a|b", 8), Some(("a", false)));
+        assert_eq!(at("people:a|b", 9), Some(("b", false)));
         // And across a `;`, the second filter is its own value.
-        assert_eq!(at("tags:a; people:bo", 17), Some(("bo", false)));
+        assert_eq!(at("people:a; people:bo", 19), Some(("bo", false)));
 
         // `location:` takes `|` but not `+`, so a place keeps its plus.
         assert_eq!(at("location:Rock + Roll", 20), Some(("Rock + Roll", false)));
@@ -392,10 +392,10 @@ mod tests {
     #[test]
     fn every_offset_lands_on_a_char_boundary() {
         for query in [
-            "tags:\"Ärger\"+\"日本\"|ü",
-            "location:Köln; tags:\"süß\"",
+            "people:\"Ärger\"+\"日本\"|ü",
+            "location:Köln; people:\"süß\"",
             "Ärger",
-            "tags:\"Ä",
+            "people:\"Ä",
         ] {
             for segment in scan(query) {
                 let mut offsets = vec![segment.range.start, segment.range.end];

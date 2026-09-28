@@ -208,7 +208,6 @@ pub(super) fn metadata<B: Backend>(
         MetadataAction::BeginEdit(kind) => {
             set_editor_prompt(app, EditorPrompt::None);
             match kind {
-                crate::tui::state::MetadataKind::Tags => app.begin_edit_tags(),
                 crate::tui::state::MetadataKind::People => app.begin_edit_people(),
                 crate::tui::state::MetadataKind::Activities => app.begin_edit_activities(),
             }

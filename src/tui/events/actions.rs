@@ -530,7 +530,6 @@ pub(super) fn set_metadata_on_entry(
     }
 
     let field = match kind {
-        MetadataKind::Tags => MetadataField::Tags(values.to_vec()),
         MetadataKind::People => MetadataField::People(values.to_vec()),
         MetadataKind::Activities => MetadataField::Activities(values.to_vec()),
     };
@@ -930,7 +929,8 @@ mod tests {
 
     #[test]
     fn save_internal_editor_error_keeps_buffer_open() {
-        let (_dir, mut app, path) = app_with_entry("+++\n[entry]\ntags = []\n+++\n\n# Original\n");
+        let (_dir, mut app, path) =
+            app_with_entry("+++\n[entry]\npeople = []\n+++\n\n# Original\n");
         let target = app.selected_entry_target().unwrap();
         let journal = app.resolved_selected_entry().unwrap().journal.clone();
         let (_, revision) = app
@@ -948,7 +948,7 @@ mod tests {
             Default::default(),
         );
         editor.original = "# Original".to_string();
-        editor.metadata.tags.push("cannot-write".to_string());
+        editor.metadata.people.push("cannot-write".to_string());
         app.editor = Some(editor);
 
         let result = save_internal_editor(&mut app);
@@ -1165,10 +1165,10 @@ mod tests {
     #[test]
     fn open_editor_seeds_buffered_metadata_from_entry() {
         let (_dir, mut app, _path) =
-            app_with_entry("+++\nschema_version = 1\n\n[entry]\ntags = [\"seed\"]\n+++\n\n# A\n");
+            app_with_entry("+++\nschema_version = 1\n\n[entry]\npeople = [\"seed\"]\n+++\n\n# A\n");
         app.open_editor_for_selected().unwrap();
         assert_eq!(
-            app.editor.as_ref().unwrap().metadata.tags,
+            app.editor.as_ref().unwrap().metadata.people,
             vec!["seed".to_string()]
         );
     }
@@ -1178,7 +1178,7 @@ mod tests {
         let (_dir, mut app, path) = app_with_entry("+++\nschema_version = 1\n+++\n\n# A\n");
         app.open_editor_for_selected().unwrap();
         app.set_editor_metadata(
-            MetadataKind::Tags,
+            MetadataKind::People,
             &["work".to_string(), "focus".to_string()],
         );
 
@@ -1196,7 +1196,7 @@ mod tests {
         let mut editor = EntryEditor::for_new("work".to_string());
         editor.textarea.insert_str("New body");
         editor.metadata.mood = Some(3);
-        editor.metadata.tags = vec!["idea".to_string()];
+        editor.metadata.people = vec!["idea".to_string()];
         app.editor = Some(editor);
 
         save_internal_editor(&mut app).unwrap();
@@ -1208,7 +1208,7 @@ mod tests {
             .find(|entry| entry.body.contains("New body"))
             .expect("new entry saved");
         assert_eq!(saved.mood, Some(3));
-        assert!(saved.tags.contains(&"idea".to_string()));
+        assert!(saved.people.contains(&"idea".to_string()));
     }
 
     #[test]

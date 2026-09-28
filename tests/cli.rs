@@ -132,61 +132,6 @@ fn log_command_ingests_local_image_asset() {
 }
 
 #[test]
-fn log_command_writes_tags() {
-    let dir = tempdir().unwrap();
-    let root = dir.path().join("journals");
-    let config = dir.path().join("config.toml");
-    fs::create_dir_all(root.join("work")).unwrap();
-    write_config(&config, &root, Some("work"));
-
-    let output = Command::new(journal_bin())
-        .arg("--config")
-        .arg(config.parent().unwrap())
-        .arg("log")
-        .arg("--tag")
-        .arg("rust")
-        .arg("--tag")
-        .arg("open source")
-        .arg("Some text")
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let entries = scan_entries_for(&root, "work");
-    assert_eq!(entries.len(), 1);
-    assert_eq!(
-        entries[0].tags,
-        vec!["rust".to_string(), "open source".to_string()]
-    );
-}
-
-#[test]
-fn log_command_accepts_comma_separated_tags() {
-    let dir = tempdir().unwrap();
-    let root = dir.path().join("journals");
-    let config = dir.path().join("config.toml");
-    fs::create_dir_all(root.join("work")).unwrap();
-    write_config(&config, &root, Some("work"));
-
-    let output = Command::new(journal_bin())
-        .arg("--config")
-        .arg(config.parent().unwrap())
-        .arg("log")
-        .arg("--tag")
-        .arg("rust,open source")
-        .arg("Some text")
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let entries = scan_entries_for(&root, "work");
-    assert_eq!(
-        entries[0].tags,
-        vec!["rust".to_string(), "open source".to_string()]
-    );
-}
-
-#[test]
 fn log_command_writes_people_and_activities() {
     let dir = tempdir().unwrap();
     let root = dir.path().join("journals");

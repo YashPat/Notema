@@ -129,14 +129,14 @@ fn app_offering_suggestions(count: usize) -> AppModel {
             fs::write(
                 dir.join(format!("{index}.md")),
                 format!(
-                    "+++\nschema_version = 1\n\n[entry]\ntags = [\"tag-{index:02}\"]\n\n[time]\ncreated_at = \"2026-07-01T10:{index:02}:00+02:00\"\n+++\n\nbody\n"
+                    "+++\nschema_version = 1\n\n[entry]\npeople = [\"tag-{index:02}\"]\n\n[time]\ncreated_at = \"2026-07-01T10:{index:02}:00+02:00\"\n+++\n\nbody\n"
                 ),
             )
             .unwrap();
         }
     });
     app.begin_search();
-    for ch in "tags:tag".chars() {
+    for ch in "people:tag".chars() {
         app.search_input_key(key(KeyCode::Char(ch)));
     }
     assert_eq!(app.search.suggestions.len(), count);

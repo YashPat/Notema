@@ -39,7 +39,6 @@ fn corpus(size: usize) -> Vec<Entry> {
                 activities: vec![format!("activity-{}", index % 12)],
                 feelings: vec![format!("feeling-{}", index % 8)],
                 people: vec![format!("person-{}", index % 20)],
-                tags: vec![format!("tag-{}", index % 30)],
                 mood: Some(i8::try_from(index % 11).unwrap() - 5),
                 starred: index % 17 == 0,
                 location: None,

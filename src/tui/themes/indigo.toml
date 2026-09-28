@@ -89,4 +89,3 @@ style      = "bg"
 feelings   = { fg = { dark = "#7d879e", light = "#5c667c" }, bg = { dark = "#2e3444", light = "#c8ceda" } }
 people     = { fg = { dark = "#6d8fc7", light = "#2f4f82" }, bg = { dark = "#2a364e", light = "#bfc9dc" } }
 activities = { fg = { dark = "#7f9d7a", light = "#4a6b46" }, bg = { dark = "#2f3a3b", light = "#c4cfd0" } }
-tags       = { fg = { dark = "#6d8fc7", light = "#2f4f82" }, bg = { dark = "#2a364e", light = "#bfc9dc" } }

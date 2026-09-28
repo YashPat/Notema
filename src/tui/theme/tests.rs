@@ -499,7 +499,7 @@ fn metadata_pills_resolve_and_default_to_reversed() {
         PillCategory::Feelings,
         PillCategory::People,
         PillCategory::Activities,
-        PillCategory::Tags,
+        PillCategory::People,
     ] {
         assert_eq!(
             bare.pill(category),
@@ -525,7 +525,7 @@ fn metadata_pills_resolve_and_default_to_reversed() {
     );
     // Unset categories ride the hover lift, so `style = "bg"` alone still
     // produces visible chips.
-    assert_eq!(bg.pill(PillCategory::Tags), bg.hover());
+    assert_eq!(bg.pill(PillCategory::People), bg.hover());
 
     let bracket = parse("[metadata.pills]\nstyle = \"bracket\"", Mode::Dark).unwrap();
     assert_eq!(bracket.pill_style(), PillStyle::Bracket);
@@ -644,7 +644,6 @@ fn pill_glyphs_resolve_and_keep_their_defaults() {
         (PillCategory::Feelings, '♥'),
         (PillCategory::People, '@'),
         (PillCategory::Activities, '◆'),
-        (PillCategory::Tags, '#'),
     ] {
         assert_eq!(bare.pill_glyph(category), glyph, "{category:?}");
     }
@@ -652,7 +651,7 @@ fn pill_glyphs_resolve_and_keep_their_defaults() {
     let themed = parse("[metadata.glyphs]\nfeelings = \"+\"", Mode::Dark).unwrap();
     assert_eq!(themed.pill_glyph(PillCategory::Feelings), '+');
     // Overriding one category leaves the rest on their defaults.
-    assert_eq!(themed.pill_glyph(PillCategory::Tags), '#');
+    assert_eq!(themed.pill_glyph(PillCategory::People), '@');
 }
 
 #[test]
@@ -1210,4 +1209,16 @@ fn startup_resolves_auto_at_the_probed_mode() {
 fn owned_theme_can_be_cloned_without_global_installation() {
     let journal = builtin("journal", Mode::Dark).unwrap();
     assert_eq!(journal.clone(), journal);
+}
+
+#[test]
+fn legacy_tags_theme_keys_still_parse() {
+    let theme = parse(
+        "[metadata.pills]\ntags = { fg = \"#101010\", bg = \"#aabbcc\" }\n\
+         [metadata.glyphs]\ntags = \"#\"\n",
+        Mode::Dark,
+    )
+    .unwrap();
+    assert_eq!(theme.pill_glyph(PillCategory::People), '@');
+    assert_eq!(theme.pill_glyph(PillCategory::Activities), '◆');
 }

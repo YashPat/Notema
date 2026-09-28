@@ -171,17 +171,14 @@ fn dialog_row_action(dialog: DialogId, index: usize) -> Option<Action> {
         DialogId::Settings => Some(Action::Settings(SettingsAction::Click(index))),
         DialogId::MetadataMenu | DialogId::EditorMetadataMenu => match index {
             0 => Some(Action::Metadata(MetadataAction::BeginEdit(
-                MetadataKind::Tags,
-            ))),
-            1 => Some(Action::Metadata(MetadataAction::BeginEdit(
                 MetadataKind::People,
             ))),
-            2 => Some(Action::Metadata(MetadataAction::BeginEdit(
+            1 => Some(Action::Metadata(MetadataAction::BeginEdit(
                 MetadataKind::Activities,
             ))),
-            3 => Some(Action::Metadata(MetadataAction::BeginFeelings)),
-            4 => Some(Action::Metadata(MetadataAction::BeginMood)),
-            5 => Some(Action::Location(LocationAction::BeginEdit)),
+            2 => Some(Action::Metadata(MetadataAction::BeginFeelings)),
+            3 => Some(Action::Metadata(MetadataAction::BeginMood)),
+            4 => Some(Action::Location(LocationAction::BeginEdit)),
             _ => None,
         },
         DialogId::ThemePicker => Some(Action::Settings(SettingsAction::ThemePickerClick(index))),

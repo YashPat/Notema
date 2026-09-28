@@ -379,7 +379,6 @@ impl Theme {
                 PillCategory::Feelings => self.metadata.pill_feelings,
                 PillCategory::People => self.metadata.pill_people,
                 PillCategory::Activities => self.metadata.pill_activities,
-                PillCategory::Tags => self.metadata.pill_tags,
             },
         }
     }
@@ -391,7 +390,6 @@ impl Theme {
             PillCategory::Feelings => self.metadata.glyphs.feelings,
             PillCategory::People => self.metadata.glyphs.people,
             PillCategory::Activities => self.metadata.glyphs.activities,
-            PillCategory::Tags => self.metadata.glyphs.tags,
         }
     }
 
@@ -499,7 +497,6 @@ impl Theme {
             ("pill_feelings", self.metadata.pill_feelings),
             ("pill_people", self.metadata.pill_people),
             ("pill_activities", self.metadata.pill_activities),
-            ("pill_tags", self.metadata.pill_tags),
             ("aqi_poor", self.metadata.aqi_poor),
             ("aqi_very_poor", self.metadata.aqi_very_poor),
             ("aqi_extremely_poor", self.metadata.aqi_extremely_poor),

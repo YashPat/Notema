@@ -223,9 +223,6 @@ fn classify_segment(segment: &str, today: Date) -> SegmentKind<'_> {
     };
     let value = value.trim();
     match prefix {
-        Prefix::Tags => {
-            SegmentKind::Filter(Box::new(metadata_predicate(MetadataKind::Tags, value)))
-        }
         Prefix::People => {
             SegmentKind::Filter(Box::new(metadata_predicate(MetadataKind::People, value)))
         }
@@ -273,7 +270,6 @@ mod tests {
             activities: Vec::new(),
             feelings: Vec::new(),
             people: Vec::new(),
-            tags: Vec::new(),
             mood,
             starred: false,
             location: Some(Location {
@@ -480,15 +476,15 @@ mod tests {
 
     /// An entry carrying `body`, `tags`, `people`, and a date, with the search
     /// haystack built from body + metadata so full-text mixing works.
-    fn rich_entry(body: &str, tags: &[&str], people: &[&str], date: Option<&str>) -> Entry {
+    fn rich_entry(body: &str, activities: &[&str], people: &[&str], date: Option<&str>) -> Entry {
         let mut entry = located_entry("Berlin", "Germany", None);
-        entry.tags = tags.iter().map(|value| value.to_string()).collect();
+        entry.activities = activities.iter().map(|value| value.to_string()).collect();
         entry.people = people.iter().map(|value| value.to_string()).collect();
         entry.created_at =
             date.map(|day| notema_domain::Timestamp::parse(format!("{day}T10:00:00+02:00")));
         entry.body = body.to_string();
         let metadata = notema_domain::Metadata {
-            tags: entry.tags.clone(),
+            activities: entry.activities.clone(),
             people: entry.people.clone(),
             ..Default::default()
         };
@@ -505,11 +501,11 @@ mod tests {
         ]);
 
         // Each filter alone is looser than the two chained together.
-        assert_eq!(run(&mut app, "tags:work"), 2);
+        assert_eq!(run(&mut app, "activities:work"), 2);
         assert_eq!(run(&mut app, "people:alice"), 2);
-        assert_eq!(run(&mut app, "tags:work; people:alice"), 1);
+        assert_eq!(run(&mut app, "activities:work; people:alice"), 1);
         // Whitespace around the separator is ignored.
-        assert_eq!(run(&mut app, "tags:work ; people:alice"), 1);
+        assert_eq!(run(&mut app, "activities:work ; people:alice"), 1);
     }
 
     #[test]
@@ -534,9 +530,9 @@ mod tests {
             rich_entry("", &["travel"], &[], None),
         ]);
 
-        assert_eq!(run(&mut app, "tags:work|home"), 2);
-        assert_eq!(run(&mut app, "tags:work|home|travel"), 3);
-        assert_eq!(run(&mut app, "tags:work|missing"), 1);
+        assert_eq!(run(&mut app, "activities:work|home"), 2);
+        assert_eq!(run(&mut app, "activities:work|home|travel"), 3);
+        assert_eq!(run(&mut app, "activities:work|missing"), 1);
     }
 
     #[test]
@@ -548,8 +544,8 @@ mod tests {
         ]);
 
         // `work+berlin|paris` is work AND (berlin OR paris): the two work entries.
-        assert_eq!(run(&mut app, "tags:work+berlin|paris"), 2);
-        assert_eq!(run(&mut app, "tags:home+berlin|paris"), 1);
+        assert_eq!(run(&mut app, "activities:work+berlin|paris"), 2);
+        assert_eq!(run(&mut app, "activities:home+berlin|paris"), 1);
     }
 
     #[test]
@@ -576,16 +572,16 @@ mod tests {
 
         // The bare word is full-text; the tag narrows it further.
         assert_eq!(run(&mut app, "beach"), 2);
-        assert_eq!(run(&mut app, "beach; tags:travel"), 1);
+        assert_eq!(run(&mut app, "beach; activities:travel"), 1);
     }
 
     #[test]
     fn an_unreadable_segment_zeroes_the_whole_query() {
         let mut app = app_with(vec![rich_entry("", &["work"], &[], None)]);
 
-        // `tags:work` alone would match; the bad date segment kills the query.
-        assert_eq!(run(&mut app, "tags:work"), 1);
-        assert_eq!(run(&mut app, "tags:work; date:garbage"), 0);
+        // `activities:work` alone would match; the bad date segment kills the query.
+        assert_eq!(run(&mut app, "activities:work"), 1);
+        assert_eq!(run(&mut app, "activities:work; date:garbage"), 0);
     }
 
     /// A scalar has no exact mode, so quoting one is only ever structural. An
@@ -599,7 +595,7 @@ mod tests {
         ]);
 
         assert_eq!(run(&mut app, "date:\"2026-07-25"), 2);
-        assert_eq!(run(&mut app, "tags:work; date:\"2026-07-25"), 1);
+        assert_eq!(run(&mut app, "activities:work; date:\"2026-07-25"), 1);
     }
 
     #[test]
@@ -607,10 +603,10 @@ mod tests {
         let mut app = app_with(vec![rich_entry("", &["work"], &[], None)]);
 
         // No value to match on, so the filter is empty rather than universal.
-        assert_eq!(run(&mut app, "tags:"), 0);
+        assert_eq!(run(&mut app, "activities:"), 0);
         assert_eq!(run(&mut app, "feelings:"), 0);
         // An empty quoted value is empty too, not "match everything exactly".
-        assert_eq!(run(&mut app, "tags:\"\""), 0);
+        assert_eq!(run(&mut app, "activities:\"\""), 0);
         assert_eq!(run(&mut app, "feelings:\"\""), 0);
     }
 
@@ -625,17 +621,17 @@ mod tests {
         ]);
 
         // Unquoted stays a substring, so the list narrows as the value is typed.
-        assert_eq!(run(&mut app, "tags:app"), 3);
-        assert_eq!(run(&mut app, "tags:appl"), 2);
+        assert_eq!(run(&mut app, "activities:app"), 3);
+        assert_eq!(run(&mut app, "activities:appl"), 2);
         // Quoted is the value itself — what a chip or a filter row commits.
-        assert_eq!(run(&mut app, "tags:\"app\""), 1);
-        assert_eq!(run(&mut app, "tags:\"apple\""), 1);
-        assert_eq!(run(&mut app, "tags:\"pineapple\""), 1);
+        assert_eq!(run(&mut app, "activities:\"app\""), 1);
+        assert_eq!(run(&mut app, "activities:\"apple\""), 1);
+        assert_eq!(run(&mut app, "activities:\"pineapple\""), 1);
         // The opening quote is typed before the value it will wrap, so until it
         // has a partner the value narrows exactly as the bare one does — the
         // closing quote is what makes it exact.
-        assert_eq!(run(&mut app, "tags:\"app"), 3);
-        assert_eq!(run(&mut app, "tags:\"appl"), 2);
+        assert_eq!(run(&mut app, "activities:\"app"), 3);
+        assert_eq!(run(&mut app, "activities:\"appl"), 2);
     }
 
     /// A quoted value means the bytes between the quotes, so a tag stored with
@@ -647,9 +643,9 @@ mod tests {
             rich_entry("", &["work"], &[], None),
         ]);
 
-        assert_eq!(run(&mut app, "tags:\" work \""), 1);
-        assert_eq!(run(&mut app, "tags:\"work\""), 1);
-        assert_eq!(run(&mut app, "tags:work"), 2);
+        assert_eq!(run(&mut app, "activities:\" work \""), 1);
+        assert_eq!(run(&mut app, "activities:\"work\""), 1);
+        assert_eq!(run(&mut app, "activities:work"), 2);
     }
 
     #[test]
@@ -662,11 +658,11 @@ mod tests {
         ]);
 
         // Exactly-a, or anything containing b.
-        assert_eq!(run(&mut app, "tags:\"a\"|b"), 3);
-        assert_eq!(run(&mut app, "tags:\"a\""), 1);
-        assert_eq!(run(&mut app, "tags:a"), 2);
+        assert_eq!(run(&mut app, "activities:\"a\"|b"), 3);
+        assert_eq!(run(&mut app, "activities:\"a\""), 1);
+        assert_eq!(run(&mut app, "activities:a"), 2);
         // Unbalanced quotes are not a pair, so the `"` stays literal.
-        assert_eq!(run(&mut app, "tags:\"a\"b"), 0);
+        assert_eq!(run(&mut app, "activities:\"a\"b"), 0);
     }
 
     /// `happy` and `unhappy` are both canonical feelings, one holding the other's
@@ -701,8 +697,8 @@ mod tests {
         ]);
 
         // Unquoted, `+` splits and the leftover `c` matches both tags.
-        assert_eq!(run(&mut app, "tags:c++"), 2);
-        assert_eq!(run(&mut app, "tags:\"c++\""), 1);
+        assert_eq!(run(&mut app, "activities:c++"), 2);
+        assert_eq!(run(&mut app, "activities:\"c++\""), 1);
     }
 
     #[test]
@@ -712,9 +708,12 @@ mod tests {
             rich_entry("", &["berlin"], &[], None),
         ]);
 
-        assert_eq!(run(&mut app, "tags:\"berlin; mitte\""), 1);
+        assert_eq!(run(&mut app, "activities:\"berlin; mitte\""), 1);
         // The quotes only shield what they wrap — chaining still works after them.
-        assert_eq!(run(&mut app, "tags:\"berlin; mitte\"; tags:berlin"), 1);
+        assert_eq!(
+            run(&mut app, "activities:\"berlin; mitte\"; activities:berlin"),
+            1
+        );
     }
 
     #[test]
@@ -725,7 +724,7 @@ mod tests {
         ]);
 
         // What the chip and the filter browser build round-trips to the one tag.
-        let query = format!("tags:{}", quote_filter_value("a\";b"));
+        let query = format!("activities:{}", quote_filter_value("a\";b"));
         assert_eq!(run(&mut app, &query), 1);
     }
 }

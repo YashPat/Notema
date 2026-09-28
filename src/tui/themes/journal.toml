@@ -15,7 +15,7 @@
 # own.
 #
 # [metadata.pills] takes `style = "reversed"|"bg"|"bracket"` plus one style
-# per chip category (feelings, people, activities, tags); [metadata.glyphs]
+# per chip category (feelings, people, activities); [metadata.glyphs]
 # holds the environment strip's characters, with per-slug weather and moon
 # tables ([metadata.glyphs.weather] / [metadata.glyphs.moon] — see
 # wasteland.toml for an all-ASCII set).
@@ -113,7 +113,6 @@ style      = "bg"
 feelings   = { fg = { dark = "#b493ff", light = "#6b4fd6" }, bg = { dark = "#3c344f", light = "#d8d2ed" } }
 people     = { fg = { dark = "#62a0ff", light = "#1f5fd0" }, bg = { dark = "#28374f", light = "#c9d5ec" } }
 activities = { fg = { dark = "#7fd06a", light = "#357a2a" }, bg = { dark = "#2f432a", light = "#cddbcb" } }
-tags       = { fg = { dark = "#56b6b0", light = "#157d76" }, bg = { dark = "#243c3b", light = "#c7dbda" } }
 
 [tabs]
 separator = "secondary"

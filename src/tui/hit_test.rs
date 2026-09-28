@@ -59,14 +59,13 @@ pub(crate) fn entry_index_at(
 }
 
 /// A clickable metadata chip in the entry view. Feelings is included alongside
-/// the free-form kinds because both are clickable, even though only tags/people/
+/// the free-form kinds because both are clickable, even though only people and
 /// activities share the editing machinery (`MetadataKind`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MetadataChip {
     Feelings,
     People,
     Activities,
-    Tags,
 }
 
 /// Which metadata chip (if any) sits under the given point, and its value.
@@ -85,7 +84,6 @@ pub(crate) fn metadata_at_point(
         PillCategory::Feelings => MetadataChip::Feelings,
         PillCategory::People => MetadataChip::People,
         PillCategory::Activities => MetadataChip::Activities,
-        PillCategory::Tags => MetadataChip::Tags,
     };
     Some((chip, value))
 }

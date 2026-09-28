@@ -200,12 +200,14 @@ leading each GitHub alert — `note` (`i`), `tip` (`*`), `important` / `warning`
 
 ### `[metadata]` — the entry view's metadata section
 
-**`[metadata.pills]`** — the feelings/people/activities/tags chips.
+**`[metadata.pills]`** — the feelings/people/activities chips.
 
 | Key | Form | Default |
 |---|---|---|
 | `style` | `reversed` \| `bg` \| `bracket` | `reversed` |
-| `feelings` / `people` / `activities` / `tags` | style table | ← `interaction.hover` |
+| `feelings` / `people` / `activities` | style table | ← `interaction.hover` |
+
+A theme that still lists `tags` here, or under `[metadata.glyphs]`, still loads. The key is ignored.
 
 `reversed` inverts each chip's cell (the classic/e-ink look; the category
 colors are ignored — part of the [monochrome contract](#monochrome-contract)).
@@ -224,8 +226,7 @@ species count (birch/grass/ragweed) reaches its "high" band.
 **`[metadata.glyphs]`** — the strip's characters: `rule` (`─`, the full-width
 rule above the block), `separator` (`·`, the dot between strip items), `location`
 (`⚑`), `sunrise` (`↑`), `sunset` (`↓`), `aqi` (`▲`), `pollen` (`❀`), plus the category glyph
-leading each pill: `feelings` (`♥`), `people` (`@`), `activities` (`◆`),
-`tags` (`#`). The mood bar's cells: `mood_fill` (`▓`) and `mood_track` (`░`) —
+leading each pill: `feelings` (`♥`), `people` (`@`), `activities` (`◆`). The mood bar's cells: `mood_fill` (`▓`) and `mood_track` (`░`) —
 its center marker is the shared `[charts.glyphs]` `diverge_center`, and the heavy
 at-zero variant stays code-side. Two per-slug tables: `[metadata.glyphs.weather]` (`clear` `☀`,
 `mostly_clear` `☼`, `partly_cloudy` / `cloudy` `☁`, `fog` `≡`, `drizzle` /

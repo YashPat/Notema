@@ -18,7 +18,6 @@ use crate::tui::{
 
 #[derive(Clone)]
 pub(super) struct EntryMetadata<'a> {
-    tags: &'a [String],
     people: &'a [String],
     activities: &'a [String],
     feelings: &'a [String],
@@ -46,7 +45,6 @@ impl<'a> EntryMetadata<'a> {
             environment.air_quality,
         );
         Self {
-            tags: &metadata.tags,
             people: &metadata.people,
             activities: &metadata.activities,
             feelings: &metadata.feelings,
@@ -57,7 +55,6 @@ impl<'a> EntryMetadata<'a> {
 
     pub(super) fn values(&self) -> EntryMetadataValues<'_> {
         EntryMetadataValues {
-            tags: self.tags,
             people: self.people,
             activities: self.activities,
             feelings: self.feelings,
@@ -161,7 +158,6 @@ pub(super) fn metadata_section_lines(
         && metadata.feelings.is_empty()
         && metadata.people.is_empty()
         && metadata.activities.is_empty()
-        && metadata.tags.is_empty()
         && metadata.env.is_empty()
     {
         return Vec::new();

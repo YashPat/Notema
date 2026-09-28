@@ -167,7 +167,7 @@ pub(crate) const fn chrome_mode(style: Option<ChromeStyle>) -> crate::config::Ch
     }
 }
 
-/// How the reader's metadata chips (feelings, people, activities, tags) are
+/// How the reader's metadata chips (feelings, people, activities) are
 /// drawn: `Reversed` inverts the value's cell (the e-ink/classic look), `Bg`
 /// fills with the per-category pill colors, `Bracket` is plain `[value]` text.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -186,7 +186,6 @@ pub(crate) enum PillCategory {
     Feelings,
     People,
     Activities,
-    Tags,
 }
 
 /// The line character set a theme draws boxes with: panel and dialog borders,
@@ -437,7 +436,6 @@ pub(crate) struct MetadataTheme {
     pub(super) pill_feelings: Style,
     pub(super) pill_people: Style,
     pub(super) pill_activities: Style,
-    pub(super) pill_tags: Style,
     pub(super) aqi_poor: Style,
     pub(super) aqi_very_poor: Style,
     pub(super) aqi_extremely_poor: Style,
@@ -520,7 +518,6 @@ pub(crate) struct EnvGlyphs {
     pub(crate) feelings: char,
     pub(crate) people: char,
     pub(crate) activities: char,
-    pub(crate) tags: char,
     /// The weather glyph per condition slug (`[metadata.glyphs.weather]`).
     pub(crate) weather: WeatherGlyphs,
     /// The moon glyph per phase slug (`[metadata.glyphs.moon]`).

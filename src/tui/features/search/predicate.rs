@@ -23,14 +23,14 @@ pub(super) fn date_predicate(filter: DateFilter, today: Date) -> impl Fn(&Entry)
     move |entry| entry_group_date(entry).is_some_and(|date| filter.matches(date, today))
 }
 
-/// Whether an entry matches a `tags:`/`people:`/`activities:` search: every
+/// Whether an entry matches a `activities:`/`people:`/`activities:` search: every
 /// `+`-group in `query` must match, where a group matches if *any* of its
 /// `|`-alternatives matches one of the entry's `kind` values.
 ///
-/// An alternative is a substring unless it was quoted, so `tags:app` keeps
-/// narrowing to `apple` as it is typed while `tags:"app"` — what a chip or a
+/// An alternative is a substring unless it was quoted, so `activities:app` keeps
+/// narrowing to `apple` as it is typed while `activities:"app"` — what a chip or a
 /// filter row commits — means that tag and no other. Quoting is the closed pair:
-/// `tags:"app` is the substring still, so a value narrows while it is typed
+/// `activities:"app` is the substring still, so a value narrows while it is typed
 /// whichever way it is being written.
 pub(super) fn metadata_predicate(
     kind: MetadataKind,

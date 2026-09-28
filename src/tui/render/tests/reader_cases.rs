@@ -4,13 +4,12 @@
 use super::*;
 
 fn metadata_values<'a>(
-    tags: &'a [String],
+    people: &'a [String],
     feelings: &'a [String],
     mood: Option<i8>,
 ) -> EntryMetadataValues<'a> {
     EntryMetadataValues {
-        tags,
-        people: &[],
+        people,
         activities: &[],
         feelings,
         mood,
@@ -51,7 +50,7 @@ fn metadata_hit_map_accounts_for_mood_row() {
             chips.y,
             values
         ),
-        Some((MetadataChip::Tags, "work".to_string()))
+        Some((MetadataChip::People, "work".to_string()))
     );
     // The separator cell between the two pills hits nothing.
     assert_eq!(
@@ -78,8 +77,7 @@ fn metadata_layout_places_environment_strip_before_mood_and_rows() {
         None,
     );
     let values = EntryMetadataValues {
-        tags: &tags,
-        people: &[],
+        people: &tags,
         activities: &[],
         feelings: &[],
         mood: Some(2),
@@ -128,7 +126,6 @@ fn environment_strip_height_reflects_wrapped_rows() {
         None,
     );
     let values = |environment| EntryMetadataValues {
-        tags: &[],
         people: &[],
         activities: &[],
         feelings: &[],
@@ -174,7 +171,6 @@ fn reader_wraps_long_location_hanging_under_its_glyph() {
         None,
     );
     let values = EntryMetadataValues {
-        tags: &[],
         people: &[],
         activities: &[],
         feelings: &[],
@@ -243,7 +239,7 @@ fn metadata_hit_map_uses_terminal_cell_width_for_wide_text() {
             chips.y,
             values
         ),
-        Some((MetadataChip::Tags, "集中".to_string()))
+        Some((MetadataChip::People, "集中".to_string()))
     );
 }
 
@@ -267,7 +263,7 @@ fn reader_wraps_metadata_rows_without_leading_space_or_separator() {
     fs::create_dir_all(&entry_dir).unwrap();
     fs::write(
             entry_dir.join("a.md"),
-            "+++\nschema_version = 1\n\n[entry]\ntags = [\"work\", \"personal\", \"health\"]\nfeelings = [\"calm\", \"focused\", \"tired\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\n# A\nBody\n",
+            "+++\nschema_version = 1\n\n[entry]\npeople = [\"work\", \"personal\", \"health\"]\nfeelings = [\"calm\", \"focused\", \"tired\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\n# A\nBody\n",
         )
         .unwrap();
     let config = Config::new(dir.path().to_path_buf());
@@ -311,7 +307,7 @@ fn reader_wraps_metadata_rows_without_leading_space_or_separator() {
     );
     assert_eq!(
         buffer.cell((chips.x + 1, chips.y + 4)).unwrap().symbol(),
-        "#"
+        "@"
     );
     // The pill padding is part of the hit region, and the flow keeps each
     // value's category across the wrap.
@@ -333,7 +329,7 @@ fn reader_wraps_metadata_rows_without_leading_space_or_separator() {
             chips.y + 4,
             values
         ),
-        Some((MetadataChip::Tags, "personal".to_string()))
+        Some((MetadataChip::People, "personal".to_string()))
     );
     // Spacer rows click nothing.
     assert_eq!(
@@ -370,7 +366,7 @@ fn short_reader_scrolls_metadata_after_body() {
     fs::write(
             entry_dir.join("a.md"),
             format!(
-                "+++\nschema_version = 1\n\n[entry]\ntags = [\"tiny-screen\"]\nfeelings = [\"focused\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\n# A\n{body}\n",
+                "+++\nschema_version = 1\n\n[entry]\npeople = [\"tiny-screen\"]\nfeelings = [\"focused\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\n# A\n{body}\n",
             ),
         )
         .unwrap();
@@ -388,15 +384,14 @@ fn short_reader_scrolls_metadata_after_body() {
     app.nav.scroll.reader = u16::MAX;
 
     let bottom = render_text(app, 80, 20);
-    assert!(bottom.contains(" * focused   # tiny-screen "));
+    assert!(bottom.contains(" * focused   @ tiny-screen "));
 }
 
 #[test]
 fn metadata_pins_only_when_body_keeps_min_height() {
     let tags = vec!["x".to_string()];
     let values = EntryMetadataValues {
-        tags: &tags,
-        people: &[],
+        people: &tags,
         activities: &[],
         feelings: &[],
         mood: None,
@@ -422,7 +417,6 @@ fn metadata_pins_only_when_body_keeps_min_height() {
 #[test]
 fn metadata_scroll_lines_match_the_pinned_section_height() {
     let metadata = notema_domain::Metadata {
-        tags: vec!["work".to_string(), "health".to_string()],
         feelings: vec![
             "calm".to_string(),
             "focused".to_string(),
@@ -484,7 +478,7 @@ fn metadata_scroll_lines_match_the_pinned_section_height() {
 #[test]
 fn pill_styles_share_geometry_across_reversed_bg_and_bracket() {
     let metadata = notema_domain::Metadata {
-        tags: vec!["work".to_string()],
+        people: vec!["work".to_string()],
         ..Default::default()
     };
     let reversed_theme = theme::Theme::terminal_default();
@@ -495,7 +489,7 @@ fn pill_styles_share_geometry_across_reversed_bg_and_bracket() {
 
     // The default (classic/e-ink) look: inverted pills, led by the tag glyph.
     let reversed = tags_line(&reversed_theme);
-    assert_eq!(reversed.spans[0].content.as_ref(), " # work ");
+    assert_eq!(reversed.spans[0].content.as_ref(), " @ work ");
     assert!(
         reversed.spans[0]
             .style
@@ -504,10 +498,10 @@ fn pill_styles_share_geometry_across_reversed_bg_and_bracket() {
     );
 
     let bg_theme = theme::test_theme_from_toml(
-        "[metadata.pills]\nstyle = \"bg\"\ntags = { fg = \"#101010\", bg = \"#aabbcc\" }",
+        "[metadata.pills]\nstyle = \"bg\"\npeople = { fg = \"#101010\", bg = \"#aabbcc\" }",
     );
     let bg = tags_line(&bg_theme);
-    assert_eq!(bg.spans[0].content.as_ref(), " # work ");
+    assert_eq!(bg.spans[0].content.as_ref(), " @ work ");
     assert_eq!(
         bg.spans[0].style.bg,
         Some(ratatui::style::Color::Rgb(0xaa, 0xbb, 0xcc))
@@ -515,7 +509,7 @@ fn pill_styles_share_geometry_across_reversed_bg_and_bracket() {
 
     let bracket_theme = theme::test_theme_from_toml("[metadata.pills]\nstyle = \"bracket\"");
     let bracket = tags_line(&bracket_theme);
-    assert_eq!(bracket.spans[0].content.as_ref(), "[# work]");
+    assert_eq!(bracket.spans[0].content.as_ref(), "[@ work]");
 
     assert_eq!(reversed.width(), bg.width());
     assert_eq!(bg.width(), bracket.width());
@@ -573,20 +567,19 @@ fn chip_hit_test_accounts_for_the_environment_strip_rows() {
     fs::create_dir_all(&entry_dir).unwrap();
     fs::write(
         entry_dir.join("a.md"),
-        "+++\nschema_version = 1\n\n[entry]\ntags = [\"work\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n\n[location]\nname = \"Testville Cafe\"\n+++\n\n# A\nBody\n",
+        "+++\nschema_version = 1\n\n[entry]\npeople = [\"work\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n\n[location]\nname = \"Testville Cafe\"\n+++\n\n# A\nBody\n",
     )
     .unwrap();
     let mut app = new_app(Config::new(dir.path().to_path_buf()));
     app.select_journal_by_name("work");
     app.nav.focus = Focus::Reader;
 
-    let tags = app.selected_entry_tags();
+    let tags = app.selected_entry_people();
     let environment = app.selected_entry_env_items();
     assert!(!environment.is_empty(), "the accessor must carry the strip");
     let reader = Rect::new(0, 0, 80, 40);
     let values = EntryMetadataValues {
-        tags: &tags,
-        people: &[],
+        people: &tags,
         activities: &[],
         feelings: &[],
         mood: None,
@@ -609,7 +602,7 @@ fn chip_hit_test_accounts_for_the_environment_strip_rows() {
             chips.y,
             values
         ),
-        Some((MetadataChip::Tags, "work".to_string()))
+        Some((MetadataChip::People, "work".to_string()))
     );
     // …and the strip really is part of the section's shape: without it the
     // hit-test would reason about a shorter section than the one drawn (the

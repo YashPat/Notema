@@ -54,7 +54,6 @@ mod tests {
             activities: Vec::new(),
             feelings: Vec::new(),
             people: Vec::new(),
-            tags: Vec::new(),
             mood: None,
             starred: false,
             location: None,

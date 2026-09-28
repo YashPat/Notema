@@ -116,7 +116,6 @@ impl AppModel {
     pub(crate) fn editing_metadata_values(&self, kind: MetadataKind) -> Vec<String> {
         match &self.editor {
             Some(editor) => match kind {
-                MetadataKind::Tags => editor.metadata.tags.clone(),
                 MetadataKind::People => editor.metadata.people.clone(),
                 MetadataKind::Activities => editor.metadata.activities.clone(),
             },
@@ -198,7 +197,6 @@ impl AppModel {
             return;
         };
         match kind {
-            MetadataKind::Tags => editor.metadata.tags = values.to_vec(),
             MetadataKind::People => editor.metadata.people = values.to_vec(),
             MetadataKind::Activities => editor.metadata.activities = values.to_vec(),
         }

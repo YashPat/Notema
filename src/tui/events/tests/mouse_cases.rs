@@ -259,10 +259,10 @@ fn metadata_refresh_restores_expanded_reader_and_scroll() {
     app.nav.scroll.reader = 7;
 
     let snapshot = ReaderSnapshot::capture(&app);
-    app.begin_edit_tags();
+    app.begin_edit_people();
     super::actions::set_metadata_on_entry(
         &mut app,
-        crate::tui::state::MetadataKind::Tags,
+        crate::tui::state::MetadataKind::People,
         &["work".to_string()],
     )
     .unwrap();
@@ -271,7 +271,7 @@ fn metadata_refresh_restores_expanded_reader_and_scroll() {
 
     assert_eq!(app.nav.focus, Focus::Reader);
     assert_eq!(app.nav.scroll.reader, 7);
-    assert_eq!(app.selected_entry_tags(), vec!["work".to_string()]);
+    assert_eq!(app.selected_entry_people(), vec!["work".to_string()]);
     assert!(!app.has_overlay());
 }
 
@@ -349,7 +349,7 @@ fn select_created_entry_path_opens_expanded_reader() {
 #[test]
 fn wheel_over_tag_dialog_list_scrolls_without_selection_or_toggle_change() {
     let mut app = app_with_entries(1);
-    app.begin_edit_tags();
+    app.begin_edit_people();
     set_tag_dialog_items(&mut app, 20);
     let layout =
         render::metadata_dialog_layout(&app.appearance.theme, Rect::new(0, 0, 120, 20), 20);
@@ -370,7 +370,7 @@ fn wheel_over_tag_dialog_list_scrolls_without_selection_or_toggle_change() {
 #[test]
 fn click_on_tag_dialog_row_selects_and_toggles_it() {
     let mut app = app_with_entries(1);
-    app.begin_edit_tags();
+    app.begin_edit_people();
     set_tag_dialog_items(&mut app, 5);
     let layout = render::metadata_dialog_layout(&app.appearance.theme, Rect::new(0, 0, 120, 20), 5);
 
@@ -393,7 +393,7 @@ fn click_on_tag_dialog_row_selects_and_toggles_it() {
 #[test]
 fn click_on_tag_dialog_placeholder_row_does_not_toggle() {
     let mut app = app_with_entries(1);
-    app.begin_edit_tags();
+    app.begin_edit_people();
     let state = app.edit_metadata_state_mut().unwrap();
     state.all_values = vec![("work".to_string(), 1)];
     state.filtered.clear();
@@ -420,7 +420,7 @@ fn click_on_tag_dialog_placeholder_row_does_not_toggle() {
 #[test]
 fn click_on_tag_input_row_switches_focus_to_input() {
     let mut app = app_with_entries(1);
-    app.begin_edit_tags();
+    app.begin_edit_people();
     set_tag_dialog_items(&mut app, 3);
     let layout = render::metadata_dialog_layout(&app.appearance.theme, Rect::new(0, 0, 120, 16), 3);
 
@@ -908,12 +908,12 @@ fn clicking_into_an_earlier_filter_retargets_the_suggestions() {
         fs::create_dir_all(&dir).unwrap();
         fs::write(
             dir.join("a.md"),
-            "+++\nschema_version = 1\n\n[entry]\ntags = [\"apple\"]\npeople = [\"Bob\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\nbody\n",
+            "+++\nschema_version = 1\n\n[entry]\nactivities = [\"apple\"]\npeople = [\"Bob\"]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\nbody\n",
         )
         .unwrap();
     });
     app.begin_search();
-    for ch in "tags:app; people:bo".chars() {
+    for ch in "activities:app; people:bo".chars() {
         app.search_input_key(key(KeyCode::Char(ch)));
     }
     assert_eq!(
@@ -922,14 +922,14 @@ fn clicking_into_an_earlier_filter_retargets_the_suggestions() {
         "the caret is in the people value"
     );
 
-    // Click back into the `app` fragment: `tags:app` puts it at columns 5..8.
+    // Click back into the `app` fragment: `activities:app` puts it at columns 11..14.
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 30)).unwrap();
     dispatch_action(
         &mut terminal,
         &mut app,
         Action::Mouse(action::MouseAction::TextFieldPress {
             target: action::TextFieldId::Search,
-            column: 6,
+            column: 12,
         }),
     )
     .unwrap();
@@ -937,10 +937,10 @@ fn clicking_into_an_earlier_filter_retargets_the_suggestions() {
     assert_eq!(
         app.search.suggestions.row(0).unwrap().search_value,
         "apple",
-        "the rows follow the caret into the tags value"
+        "the rows follow the caret into the activities value"
     );
     app.commit_suggestion(0);
-    assert_eq!(app.search.query.as_str(), "tags:\"apple\"; people:bo");
+    assert_eq!(app.search.query.as_str(), "activities:\"apple\"; people:bo");
 }
 
 /// The suggestion list hangs over the entry rows and is not an overlay, so it has
@@ -957,14 +957,14 @@ fn clicking_a_suggestion_commits_it_rather_than_the_entry_beneath() {
             fs::write(
                 dir.join(format!("{name}.md")),
                 format!(
-                    "+++\nschema_version = 1\n\n[entry]\ntags = [{tags}]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\nbody\n"
+                    "+++\nschema_version = 1\n\n[entry]\npeople = [{tags}]\n\n[time]\ncreated_at = \"2026-07-01T10:00:00+02:00\"\n+++\n\nbody\n"
                 ),
             )
             .unwrap();
         }
     });
     app.begin_search();
-    for ch in "tags:ap".chars() {
+    for ch in "people:ap".chars() {
         app.search_input_key(key(KeyCode::Char(ch)));
     }
     assert_eq!(app.search.suggestions.len(), 2);
@@ -987,7 +987,7 @@ fn clicking_a_suggestion_commits_it_rather_than_the_entry_beneath() {
         .expect("the click resolves");
     dispatch_action(&mut terminal, &mut app, action).unwrap();
 
-    assert_eq!(app.search.query.as_str(), "tags:\"apricot\"");
+    assert_eq!(app.search.query.as_str(), "people:\"apricot\"");
     assert_eq!(
         app.nav.selected_entry_index, selected_before,
         "the click never reached the entry row underneath"
