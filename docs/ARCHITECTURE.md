@@ -39,7 +39,7 @@ The TUI lives inside the root crate:
 |---|---|---|
 | `notema-domain` | Entry values, validated coordinates, feelings, search value types, Markdown link parsing | Filesystem access, network access, terminal types |
 | `notema-analytics` | Pure aggregation over borrowed domain entries | I/O, clocks, rendering |
-| `notema-analyze` | The Analyze fill decision (no behavior yet) | Filesystem access, network access, terminal types |
+| `notema-analyze` | The Analyze autofill decision | Filesystem access, network access, terminal types |
 | `notema-http` | The shared blocking HTTP agent, its timeouts, and iSH detection | URLs, payload shapes, retry policy |
 | `notema-timing` | Opt-in process timing behind `NOTEMA_TIMING` (`1` phase timings, `2` cache diagnostics): the level/origin/main-thread globals, stderr emission, the `defer` buffer holding output while the alternate screen is up, and Linux/Android `/proc` process-age probing | Anything the app branches on — it is write-only diagnostics |
 | `notema-context` | Geocoding, weather, air quality, celestial calculations, device location | Storage or TUI state |
