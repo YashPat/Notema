@@ -2579,6 +2579,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "notema-model"
+version = "2026.8.0"
+dependencies = [
+ "notema-http",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "notema-seed"
 version = "2026.8.0"
 dependencies = [

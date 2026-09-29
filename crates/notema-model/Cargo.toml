@@ -1,0 +1,21 @@
+[package]
+name = "notema-model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+notema-http.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[features]
+default = []
+tls-ring = ["notema-http/tls-ring"]
+tls-native = ["notema-http/tls-native"]
+
+[lints]
+workspace = true

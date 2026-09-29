@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
 
-//! The blocking HTTP GET shared by the two network callers: context provider
-//! lookups (geocoding, weather, air quality) and remote asset download. One
-//! process-wide `ureq` agent, a global timeout, a short connect cap, and a
-//! per-call bound on the response body.
+//! The blocking HTTP shared by the network callers: context provider lookups
+//! (geocoding, weather, air quality), remote asset download, and chat
+//! completions. One process-wide `ureq` agent, a global timeout, a short
+//! connect cap, and a per-call bound on the response body.
 
 use std::{path::Path, sync::OnceLock, sync::mpsc, thread, time::Duration};
 
@@ -35,6 +35,35 @@ pub fn get_string(url: &str, max_bytes: u64) -> Result<String, HttpError> {
             .get(url)
             .header("User-Agent", USER_AGENT)
             .call()?
+            .body_mut()
+            .with_config()
+            .limit(max_bytes)
+            .read_to_string()?)
+    })
+}
+
+/// POST `body` to `url` and read the response as UTF-8, at most `max_bytes`.
+///
+/// `headers` are added after the shared `User-Agent`. This function does not
+/// know what the body is.
+pub fn post_string(
+    url: &str,
+    headers: &[(&str, &str)],
+    body: &str,
+    max_bytes: u64,
+) -> Result<String, HttpError> {
+    let headers: Vec<(String, String)> = headers
+        .iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
+    let body = body.to_string();
+    run(url, move |url| {
+        let mut request = agent().post(url).header("User-Agent", USER_AGENT);
+        for (key, value) in &headers {
+            request = request.header(key, value);
+        }
+        Ok(request
+            .send(body)?
             .body_mut()
             .with_config()
             .limit(max_bytes)

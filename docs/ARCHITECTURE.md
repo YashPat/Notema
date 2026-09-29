@@ -41,6 +41,7 @@ The TUI lives inside the root crate:
 | `notema-analytics` | Pure aggregation over borrowed domain entries | I/O, clocks, rendering |
 | `notema-autofill` | The autofill decision | Filesystem access, network access, terminal types |
 | `notema-http` | The shared blocking HTTP agent, its timeouts, and iSH detection | URLs, payload shapes, retry policy |
+| `notema-model` | The chat-completion request and the assistant text | Prompts, field meanings, config, UI |
 | `notema-timing` | Opt-in process timing behind `NOTEMA_TIMING` (`1` phase timings, `2` cache diagnostics): the level/origin/main-thread globals, stderr emission, the `defer` buffer holding output while the alternate screen is up, and Linux/Android `/proc` process-age probing | Anything the app branches on — it is write-only diagnostics |
 | `notema-context` | Geocoding, weather, air quality, celestial calculations, device location | Storage or TUI state |
 | `notema-import` | Parsing and normalizing external export formats | Journal creation, dedup policy, writes |
@@ -58,8 +59,9 @@ graph (test-only `dev-dependencies` on storage, for round-trip fixtures, are
 exempt). FUSE reaches storage through its public facade.
 
 Network access is a capability, not a layer: `notema-context` (geocoding,
-weather, air quality) and `notema-storage` (remote asset download) are the only
-crates that reach the network, and every request goes through `notema-http`,
+weather, air quality), `notema-storage` (remote asset download), and
+`notema-model` (chat completions) are the only crates that reach the network,
+and every request goes through `notema-http`,
 which owns the agent but decides nothing about what is fetched. Storage also
 opens a plain `TcpStream` to check whether a host is up before downloading from
 it, so an import full of links to a dead server fails fast. Every other crate —
