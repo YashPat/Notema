@@ -128,7 +128,9 @@ pub fn fetch_ollama_tags() -> Result<Vec<String>, ModelError> {
 /// Build the `POST /v1/chat/completions` call for `model`.
 ///
 /// `schema` is embedded as the caller passed it. The schema name is always
-/// `response`.
+/// `response`. An Ollama base URL also sets `reasoning_effort` to `low`:
+/// thinking models think unless told otherwise, and `low` is the shortest
+/// level all of them accept.
 pub fn completion_request(
     model: &ChatModel,
     messages: &[ChatMessage],
@@ -147,20 +149,24 @@ pub fn completion_request(
             })
         })
         .collect();
+    let mut body = json!({
+        "model": model.model,
+        "messages": messages,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "response",
+                "schema": schema,
+            },
+        },
+    });
+    if is_ollama(&model.base_url) {
+        body["reasoning_effort"] = json!("low");
+    }
     CompletionRequest {
         url: completions_url(&model.base_url),
         headers,
-        body: json!({
-            "model": model.model,
-            "messages": messages,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "response",
-                    "schema": schema,
-                },
-            },
-        }),
+        body,
     }
 }
 
@@ -204,8 +210,16 @@ fn bearer(token: Option<&str>) -> Option<&str> {
 }
 
 fn completions_url(base_url: &str) -> String {
-    let base = base_url.strip_suffix('/').unwrap_or(base_url);
+    let base = canonical_base(base_url);
     format!("{base}/chat/completions")
+}
+
+fn is_ollama(base_url: &str) -> bool {
+    canonical_base(base_url) == OLLAMA_BASE_URL
+}
+
+fn canonical_base(base_url: &str) -> &str {
+    base_url.trim().trim_end_matches('/')
 }
 
 /// A chat completion failed in transit, or the body was not a completion.
@@ -302,6 +316,23 @@ mod tests {
             request.body["response_format"]["json_schema"]["schema"],
             schema()
         );
+        assert_eq!(request.body["reasoning_effort"], "low");
+    }
+
+    #[test]
+    fn a_cloud_request_does_not_set_reasoning_effort() {
+        let mut configured = model(None);
+        configured.base_url = "https://api.openai.com/v1".to_string();
+        let request = completion_request(&configured, &messages(), &schema());
+        assert!(request.body.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn an_ollama_url_with_a_trailing_slash_still_sets_reasoning_effort() {
+        let mut configured = model(None);
+        configured.base_url = "http://127.0.0.1:11434/v1/".to_string();
+        let request = completion_request(&configured, &messages(), &schema());
+        assert_eq!(request.body["reasoning_effort"], "low");
     }
 
     #[test]
