@@ -13,6 +13,7 @@ use crate::tui::{
     features::{location::EditLocationFocus, metadata::EditMetadataFocus},
     render,
     state::{HoverTarget, ListNav, MetadataKind, Overlay},
+    surface::entry_metadata_layout,
     ui::{ConfirmId, DialogId, DialogInputId, InteractionKind, ViewState, interaction::PanelId},
 };
 
@@ -171,10 +172,10 @@ pub(super) fn mouse_to_action(
                     ..
                 }) => None,
                 Some(InteractionKind::Row { panel, index }) => {
-                    panel_click_action(app, *panel, Some(*index), &layout, mouse)
+                    panel_click_action(app, *panel, Some(*index), &layout, mouse, view)
                 }
                 Some(InteractionKind::Panel(panel)) => {
-                    panel_click_action(app, *panel, None, &layout, mouse)
+                    panel_click_action(app, *panel, None, &layout, mouse, view)
                 }
                 _ => None,
             }
@@ -403,6 +404,7 @@ fn panel_click_action(
     index: Option<usize>,
     layout: &render::TuiLayout,
     mouse: MouseEvent,
+    view: &ViewState,
 ) -> Option<Action> {
     match panel {
         PanelId::Journals => {
@@ -432,12 +434,15 @@ fn panel_click_action(
                 return None;
             }
             let metadata = app.selected_entry_metadata_values();
+            let values = metadata.values();
+            let (show_button, _) = app.reader_autofill_state(values);
             if let Some((chip, value)) = render::metadata_at_point(
                 &app.appearance.theme,
                 area.area,
                 mouse.column,
                 mouse.row,
-                metadata.values(),
+                values,
+                show_button,
             ) {
                 let kind = match chip {
                     render::MetadataChip::Feelings => MetadataSearchTarget::Feelings,
@@ -449,6 +454,25 @@ fn panel_click_action(
                     }
                 };
                 return Some(Action::Mouse(MouseAction::MetadataSearch { kind, value }));
+            }
+            if render::metadata_scrolls_with_body(
+                &app.appearance.theme,
+                area.area,
+                values,
+                show_button,
+            ) {
+                if view.reader_autofill_at(mouse.column, mouse.row) {
+                    return Some(Action::Mouse(MouseAction::Autofill));
+                }
+            } else {
+                let layout =
+                    entry_metadata_layout(&app.appearance.theme, area.area, values, show_button);
+                if layout
+                    .autofill
+                    .is_some_and(|rect| render::point_in_rect(rect, mouse.column, mouse.row))
+                {
+                    return Some(Action::Mouse(MouseAction::Autofill));
+                }
             }
             // Focus the viewer on the pane. A click already inside a full-screen viewer
             // must not collapse it, so `focus_reader_from_click` only resets fullscreen
@@ -616,6 +640,7 @@ pub(super) fn apply_mouse_action(
             }
         }
         MouseAction::ReaderClick => app.focus_reader_from_click(),
+        MouseAction::Autofill => return Ok(Some(Action::Autofill)),
         MouseAction::MetadataSearch { kind, value } => match kind {
             MetadataSearchTarget::Feelings => app.begin_feeling_search(&value),
             MetadataSearchTarget::Metadata(MetadataKind::People) => app.begin_people_search(&value),
@@ -932,14 +957,36 @@ fn hover_target_at(
         && app.has_selected_entry_target()
     {
         let metadata = app.selected_entry_metadata_values();
+        let values = metadata.values();
+        let (show_button, _) = app.reader_autofill_state(values);
         if let Some(index) = render::metadata_chip_index_at(
             &app.appearance.theme,
             panel.area,
             col,
             row,
-            metadata.values(),
+            values,
+            show_button,
         ) {
             return HoverTarget::MetadataChip(index);
+        }
+        if render::metadata_scrolls_with_body(
+            &app.appearance.theme,
+            panel.area,
+            values,
+            show_button,
+        ) {
+            if view.reader_autofill_at(col, row) {
+                return HoverTarget::Autofill;
+            }
+        } else {
+            let layout =
+                entry_metadata_layout(&app.appearance.theme, panel.area, values, show_button);
+            if layout
+                .autofill
+                .is_some_and(|rect| render::point_in_rect(rect, col, row))
+            {
+                return HoverTarget::Autofill;
+            }
         }
     }
 

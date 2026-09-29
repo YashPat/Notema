@@ -156,6 +156,77 @@ fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::empty())
 }
 
+/// A short fullscreen reader folds metadata into the body. The click lands on
+/// the drawn Autofill row, including after that row scrolls, and misses the
+/// pinned footer rect and a row that has scrolled away.
+#[test]
+fn scrolling_autofill_follows_the_drawn_row() {
+    let mut app = app_reading(&"line\n".repeat(80));
+    app.nav.reader_fullscreen = true;
+    app.appearance.theme = crate::tui::theme::test_flat_theme();
+    let area = Rect::new(0, 0, 100, 18);
+
+    let (_terminal, view) = render_view(&mut app, area.width, area.height);
+    let line = view
+        .reader
+        .autofill_line
+        .expect("label scrolls with the body");
+    let rect = view.reader.content_rect;
+    assert!(
+        line >= view.reader.scroll as usize + rect.height as usize,
+        "the label starts below the viewport"
+    );
+
+    let metadata = app.selected_entry_metadata_values();
+    let values = metadata.values();
+    let (show_button, _) = app.reader_autofill_state(values);
+    let pinned = crate::tui::surface::entry_metadata_layout(
+        &app.appearance.theme,
+        view.layout.unwrap().reader.unwrap().area,
+        values,
+        show_button,
+    )
+    .autofill
+    .expect("pinned layout still reserves a button");
+    let pinned_click =
+        mouse::mouse_to_action(&app, mouse(down(), pinned.x, pinned.y), area, &view, false);
+    assert!(
+        !matches!(
+            pinned_click,
+            Some(Action::Mouse(super::action::MouseAction::Autofill))
+        ),
+        "the empty bottom row is not the scrolling label"
+    );
+    assert!(!view.reader_autofill_at(rect.x, rect.y + rect.height - 1));
+
+    app.nav.scroll.reader = line as u16;
+    let (terminal, view) = render_view(&mut app, area.width, area.height);
+    let shown = view.reader.scroll;
+    let row = view
+        .reader
+        .content_rect
+        .y
+        .saturating_add((line as u16).saturating_sub(shown));
+    let col = view.reader.content_rect.x;
+    assert!(view.reader_autofill_at(col, row));
+    assert_eq!(
+        mouse::mouse_to_action(&app, mouse(down(), col, row), area, &view, false),
+        Some(Action::Mouse(super::action::MouseAction::Autofill))
+    );
+
+    app.hover = HoverTarget::Autofill;
+    let (hovered, _) = render_view(&mut app, area.width, area.height);
+    let plain = terminal
+        .backend()
+        .buffer()
+        .cell((col, row))
+        .unwrap()
+        .style();
+    let lifted = hovered.backend().buffer().cell((col, row)).unwrap().style();
+    assert_ne!(plain.bg, lifted.bg);
+    assert_eq!(lifted.bg, app.appearance.theme.hover().bg);
+}
+
 mod environment_cases;
 mod keyboard_cases;
 mod mouse_cases;

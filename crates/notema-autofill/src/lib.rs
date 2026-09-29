@@ -75,8 +75,8 @@ fn system_prompt(known_people: &[String], known_activities: &[String]) -> String
 Return only a JSON object with keys \"feelings\", \"people\", \"activities\", and \"mood\".
 Use only these feeling names: {feelings_json}
 Mood is an integer from {mood_start} to {mood_end}.
-People already used in this journal: {people_json}
-Activities already used in this journal: {activities_json}
+People already used: {people_json}
+Activities already used: {activities_json}
 Reuse a name from those lists when it is the same person, or same activity. Add a new name only when it is worth adding.
 Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
     )
@@ -474,12 +474,12 @@ mod tests {
         assert!(
             prompt
                 .system
-                .contains("People already used in this journal: [\"Ada\",\"Sam\"]")
+                .contains("People already used: [\"Ada\",\"Sam\"]")
         );
         assert!(
             prompt
                 .system
-                .contains("Activities already used in this journal: [\"hiking\"]")
+                .contains("Activities already used: [\"hiking\"]")
         );
         assert!(prompt.system.contains(
             "Reuse a name from those lists when it is the same person, or same activity."
@@ -492,16 +492,8 @@ mod tests {
     #[test]
     fn empty_known_lists_are_empty_arrays() {
         let prompt = autofill_prompt("body", &CurrentFields::default(), &[], &[]);
-        assert!(
-            prompt
-                .system
-                .contains("People already used in this journal: []")
-        );
-        assert!(
-            prompt
-                .system
-                .contains("Activities already used in this journal: []")
-        );
+        assert!(prompt.system.contains("People already used: []"));
+        assert!(prompt.system.contains("Activities already used: []"));
     }
 
     #[test]

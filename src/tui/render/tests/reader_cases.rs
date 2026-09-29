@@ -23,8 +23,12 @@ fn metadata_hit_map_accounts_for_mood_row() {
     let tags = vec!["work".to_string()];
     let feelings = vec!["focused".to_string()];
     let values = metadata_values(&tags, &feelings, Some(2));
-    let layout =
-        crate::tui::surface::entry_metadata_layout(&theme::Theme::terminal_default(), area, values);
+    let layout = crate::tui::surface::entry_metadata_layout(
+        &theme::Theme::terminal_default(),
+        area,
+        values,
+        false,
+    );
     let chips = layout.chips.unwrap();
     // Mood bar on its own row, then a blank gap row, then the chips.
     assert_eq!(chips.y, layout.mood.unwrap().y + 2);
@@ -38,7 +42,8 @@ fn metadata_hit_map_accounts_for_mood_row() {
             area,
             chips.x,
             chips.y,
-            values
+            values,
+            false,
         ),
         Some((MetadataChip::Feelings, "focused".to_string()))
     );
@@ -48,7 +53,8 @@ fn metadata_hit_map_accounts_for_mood_row() {
             area,
             chips.x + 12,
             chips.y,
-            values
+            values,
+            false,
         ),
         Some((MetadataChip::People, "work".to_string()))
     );
@@ -59,7 +65,8 @@ fn metadata_hit_map_accounts_for_mood_row() {
             area,
             chips.x + 11,
             chips.y,
-            values
+            values,
+            false,
         ),
         None
     );
@@ -84,8 +91,12 @@ fn metadata_layout_places_environment_strip_before_mood_and_rows() {
         environment: &environment,
     };
 
-    let layout =
-        crate::tui::surface::entry_metadata_layout(&theme::Theme::terminal_default(), area, values);
+    let layout = crate::tui::surface::entry_metadata_layout(
+        &theme::Theme::terminal_default(),
+        area,
+        values,
+        false,
+    );
     let strip = layout.environment.expect("environment strip is laid out");
     let mood = layout.mood.unwrap();
     let chips = layout.chips.unwrap();
@@ -101,7 +112,8 @@ fn metadata_layout_places_environment_strip_before_mood_and_rows() {
             area,
             strip.x,
             strip.y,
-            values
+            values,
+            false,
         ),
         None
     );
@@ -136,11 +148,13 @@ fn environment_strip_height_reflects_wrapped_rows() {
         &theme::Theme::terminal_default(),
         area,
         values(&short),
+        false,
     );
     let long_layout = crate::tui::surface::entry_metadata_layout(
         &theme::Theme::terminal_default(),
         area,
         values(&long),
+        false,
     );
 
     assert_eq!(short_layout.environment.unwrap().height, 1);
@@ -181,6 +195,7 @@ fn reader_wraps_long_location_hanging_under_its_glyph() {
         &theme::Theme::terminal_default(),
         reader,
         values,
+        true,
     );
     let strip = metadata.environment.expect("environment strip is laid out");
     assert!(strip.height >= 2, "label should wrap: {strip:?}");
@@ -215,8 +230,12 @@ fn metadata_hit_map_uses_terminal_cell_width_for_wide_text() {
     let tags = vec!["集中".to_string()];
     let feelings = vec!["嬉しい".to_string()];
     let values = metadata_values(&tags, &feelings, None);
-    let layout =
-        crate::tui::surface::entry_metadata_layout(&theme::Theme::terminal_default(), area, values);
+    let layout = crate::tui::surface::entry_metadata_layout(
+        &theme::Theme::terminal_default(),
+        area,
+        values,
+        false,
+    );
     let chips = layout.chips.unwrap();
 
     // " 嬉しい  集中 " — the feeling pill spans 8 terminal cells (6 for the
@@ -227,7 +246,8 @@ fn metadata_hit_map_uses_terminal_cell_width_for_wide_text() {
             area,
             chips.x + 5,
             chips.y,
-            values
+            values,
+            false,
         ),
         Some((MetadataChip::Feelings, "嬉しい".to_string()))
     );
@@ -237,7 +257,8 @@ fn metadata_hit_map_uses_terminal_cell_width_for_wide_text() {
             area,
             chips.x + 9 + 2,
             chips.y,
-            values
+            values,
+            false,
         ),
         Some((MetadataChip::People, "集中".to_string()))
     );
@@ -287,6 +308,7 @@ fn reader_wraps_metadata_rows_without_leading_space_or_separator() {
         &theme::Theme::terminal_default(),
         reader,
         values,
+        true,
     );
     let chips = metadata.chips.unwrap();
 
@@ -317,7 +339,8 @@ fn reader_wraps_metadata_rows_without_leading_space_or_separator() {
             reader,
             chips.x,
             chips.y + 2,
-            values
+            values,
+            true,
         ),
         Some((MetadataChip::Feelings, "tired".to_string()))
     );
@@ -327,7 +350,8 @@ fn reader_wraps_metadata_rows_without_leading_space_or_separator() {
             reader,
             chips.x,
             chips.y + 4,
-            values
+            values,
+            true,
         ),
         Some((MetadataChip::People, "personal".to_string()))
     );
@@ -338,7 +362,8 @@ fn reader_wraps_metadata_rows_without_leading_space_or_separator() {
             reader,
             chips.x,
             chips.y + 1,
-            values
+            values,
+            true,
         ),
         None
     );
@@ -348,7 +373,8 @@ fn reader_wraps_metadata_rows_without_leading_space_or_separator() {
             reader,
             chips.x,
             chips.y + 3,
-            values
+            values,
+            true,
         ),
         None
     );
@@ -402,12 +428,14 @@ fn metadata_pins_only_when_body_keeps_min_height() {
     assert!(metadata_scrolls_with_body(
         &theme::Theme::terminal_default(),
         Rect::new(0, 0, 80, 23),
-        values
+        values,
+        false,
     )); // inner 21 → body 19
     assert!(!metadata_scrolls_with_body(
         &theme::Theme::terminal_default(),
         Rect::new(0, 0, 80, 24),
-        values
+        values,
+        false,
     )); // inner 22 → body 20
 }
 
@@ -462,8 +490,12 @@ fn metadata_scroll_lines_match_the_pinned_section_height() {
             &theme::Theme::terminal_default(),
             width,
             &entry_metadata,
+            false,
+            false,
+            false,
         );
-        let height = crate::tui::surface::metadata_section_height(width, entry_metadata.values());
+        let height =
+            crate::tui::surface::metadata_section_height(width, entry_metadata.values(), false);
         assert_eq!(
             lines.len() as u16,
             height,
@@ -484,8 +516,10 @@ fn pill_styles_share_geometry_across_reversed_bg_and_bracket() {
     let reversed_theme = theme::Theme::terminal_default();
     let entry_metadata =
         super::metadata::EntryMetadata::for_entry(&reversed_theme, &metadata, Default::default());
-    let tags_line =
-        |theme| super::metadata::metadata_section_lines(theme, 40, &entry_metadata)[1].clone();
+    let tags_line = |theme| {
+        super::metadata::metadata_section_lines(theme, 40, &entry_metadata, false, false, false)[1]
+            .clone()
+    };
 
     // The default (classic/e-ink) look: inverted pills, led by the tag glyph.
     let reversed = tags_line(&reversed_theme);
@@ -589,6 +623,7 @@ fn chip_hit_test_accounts_for_the_environment_strip_rows() {
         &theme::Theme::terminal_default(),
         reader,
         values,
+        false,
     )
     .chips
     .unwrap();
@@ -600,7 +635,8 @@ fn chip_hit_test_accounts_for_the_environment_strip_rows() {
             reader,
             chips.x + 1,
             chips.y,
-            values
+            values,
+            false,
         ),
         Some((MetadataChip::People, "work".to_string()))
     );
@@ -615,13 +651,15 @@ fn chip_hit_test_accounts_for_the_environment_strip_rows() {
         crate::tui::surface::entry_metadata_layout(
             &theme::Theme::terminal_default(),
             reader,
-            without_strip
+            without_strip,
+            false,
         )
         .metadata,
         crate::tui::surface::entry_metadata_layout(
             &theme::Theme::terminal_default(),
             reader,
-            values
+            values,
+            false,
         )
         .metadata,
     );
@@ -669,4 +707,72 @@ fn reader_renders_indented_mermaid_diagram() {
     assert!(rendered.contains("mermaid"));
     assert!(rendered.contains("Open journal"));
     assert!(rendered.contains("Write entry"));
+}
+
+/// All four fields set (a `Some(0)` mood counts) hides the button. Showing it
+/// keeps the scrolling lines the same length as the pinned section.
+#[test]
+fn autofill_button_hides_when_fields_are_set_and_matches_pinned_height() {
+    let theme = theme::Theme::terminal_default();
+    let set = notema_domain::Metadata {
+        feelings: vec!["calm".to_string()],
+        people: vec!["Alex".to_string()],
+        activities: vec!["walk".to_string()],
+        mood: Some(0),
+        ..Default::default()
+    };
+    let set_meta = super::metadata::EntryMetadata::for_entry(&theme, &set, Default::default());
+    assert!(!crate::tui::surface::autofill_button_shown(
+        set_meta.values()
+    ));
+    let hidden =
+        super::metadata::metadata_section_lines(&theme, 40, &set_meta, false, false, false);
+    assert!(
+        hidden.iter().all(|line| line
+            .spans
+            .iter()
+            .all(|span| !span.content.contains("Autofill"))),
+        "button drawn for a filled entry"
+    );
+    let layout = crate::tui::surface::entry_metadata_layout(
+        &theme,
+        Rect::new(0, 0, 80, 40),
+        set_meta.values(),
+        false,
+    );
+    assert!(layout.autofill.is_none());
+
+    let empty = notema_domain::Metadata::default();
+    let empty_meta = super::metadata::EntryMetadata::for_entry(&theme, &empty, Default::default());
+    assert!(crate::tui::surface::autofill_button_shown(
+        empty_meta.values()
+    ));
+    let shown =
+        super::metadata::metadata_section_lines(&theme, 48, &empty_meta, true, false, false);
+    let height = crate::tui::surface::metadata_section_height(48, empty_meta.values(), true);
+    assert_eq!(shown.len() as u16, height);
+    let label: String = shown
+        .last()
+        .unwrap()
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect();
+    assert_eq!(label, "[ Autofill   ]");
+
+    let reading =
+        super::metadata::metadata_section_lines(&theme, 48, &empty_meta, true, true, false);
+    assert_eq!(reading.len() as u16, height);
+    let reading_label: String = reading
+        .last()
+        .unwrap()
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect();
+    assert!(reading_label.starts_with("[ Reading"));
+    assert_eq!(
+        unicode_width::UnicodeWidthStr::width(label.as_str()),
+        unicode_width::UnicodeWidthStr::width(reading_label.as_str()),
+    );
 }

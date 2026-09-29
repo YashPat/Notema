@@ -55,6 +55,8 @@ pub(crate) enum MouseAction {
     },
     InsightsClick(Option<InsightsTab>),
     ReaderClick,
+    /// Press of the reader metadata autofill button.
+    Autofill,
     MetadataSearch {
         kind: MetadataSearchTarget,
         value: String,
@@ -119,6 +121,7 @@ pub(crate) enum BackgroundAction {
     PollImages,
     PollGeocode,
     PollEnvironment,
+    PollAutofill,
     PollLibraryReload,
     PollTimers,
     LibraryPathsChanged(Vec<std::path::PathBuf>),
@@ -339,6 +342,8 @@ pub(crate) enum Action {
     ReaderHint(ReaderHintAction),
     Insights(InsightsAction),
     Filter(FilterAction),
+    /// Press of the reader metadata autofill button.
+    Autofill,
 }
 
 /// Driving link-hint mode: the reader's keyboard route to everything the mouse

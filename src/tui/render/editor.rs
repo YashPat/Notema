@@ -52,7 +52,8 @@ pub(crate) fn draw_entry_editor(
     // can't reach a read-only block past the text.) Nothing is lost: the Ctrl+G
     // dialogs show the current values as you edit them, and the viewer shows them in
     // full on save.
-    let frame_layout = EntryBodyFrame::new(active_theme, area, metadata.values(), body_layout);
+    let frame_layout =
+        EntryBodyFrame::new(active_theme, area, metadata.values(), body_layout, false);
     let text_rect = frame_layout.body;
     // Wrap for this width up front: the count below decides the rect, and the
     // textarea would otherwise still hold the previous render's map.
@@ -121,6 +122,13 @@ pub(crate) fn draw_entry_editor(
 
     if let Some(layout) = frame_layout.metadata {
         // The editor's own metadata preview has no clickable chips, so no hover.
-        draw_metadata_section(active_theme, frame, layout, &metadata, HoverTarget::None);
+        draw_metadata_section(
+            active_theme,
+            frame,
+            layout,
+            &metadata,
+            HoverTarget::None,
+            false,
+        );
     }
 }

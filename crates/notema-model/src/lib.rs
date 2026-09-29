@@ -6,6 +6,8 @@
 
 #![forbid(unsafe_code)]
 
+use std::time::Duration;
+
 use serde_json::{Value, json};
 
 /// Cap on the completion response body.
@@ -103,6 +105,8 @@ pub fn read_completion(body: &str) -> Result<String, ModelError> {
         .ok_or(ModelError::Unreadable)
 }
 
+const COMPLETION_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Post one completion and return the assistant text.
 pub fn complete(
     model: &ChatModel,
@@ -116,7 +120,13 @@ pub fn complete(
         .map(|(key, value)| (key.as_str(), value.as_str()))
         .collect();
     let body = serde_json::to_string(&request.body).expect("completion request body is JSON");
-    let response = notema_http::post_string(&request.url, &headers, &body, MAX_RESPONSE_BYTES)?;
+    let response = notema_http::post(
+        &request.url,
+        &headers,
+        &body,
+        MAX_RESPONSE_BYTES,
+        COMPLETION_TIMEOUT,
+    )?;
     read_completion(&response)
 }
 

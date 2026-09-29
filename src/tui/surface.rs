@@ -54,6 +54,9 @@ pub(crate) struct EntryMetadataLayout {
     /// The chip pills — every feeling/person/activity in one label-less
     /// flow, the category carried by each pill's own style.
     pub(crate) chips: Option<Rect>,
+    /// The autofill button's row, under the chips. Absent when the Reader
+    /// hides the control.
+    pub(crate) autofill: Option<Rect>,
 }
 
 #[derive(Clone, Copy)]
@@ -120,16 +123,27 @@ pub(crate) fn point_in_rect(area: Rect, x: u16, y: u16) -> bool {
         && y < area.y.saturating_add(area.height)
 }
 
-/// The blank row between two adjacent metadata blocks (strip, mood, chips).
+/// The blank row between two adjacent metadata blocks (strip, mood, chips, button).
 const METADATA_ROW_GAP: u16 = 1;
+
+/// The Reader shows the autofill row while any of feelings, people, activities,
+/// or mood is still empty. `Some(0)` counts as a set mood; a non-empty list
+/// counts as set.
+pub(crate) fn autofill_button_shown(values: EntryMetadataValues<'_>) -> bool {
+    values.feelings.is_empty()
+        || values.people.is_empty()
+        || values.activities.is_empty()
+        || values.mood.is_none()
+}
 
 pub(crate) fn entry_metadata_layout(
     theme: &Theme,
     reader_area: Rect,
     values: EntryMetadataValues<'_>,
+    show_button: bool,
 ) -> EntryMetadataLayout {
     let inner = PanelGeometry::new(theme, reader_area).content;
-    let metadata_height = metadata_section_height(inner.width, values);
+    let metadata_height = metadata_section_height(inner.width, values, show_button);
     let show_metadata = metadata_height > 0 && inner.height > metadata_height;
 
     let (content, metadata) = if show_metadata {
@@ -145,10 +159,11 @@ pub(crate) fn entry_metadata_layout(
     let mut environment_rect = None;
     let mut mood_rect = None;
     let mut chips_rect = None;
+    let mut autofill_rect = None;
 
     if let Some(metadata_rect) = metadata {
-        // Strip, mood bar, and chips are three blocks; a blank row sets each off
-        // from the one above it so they don't read as one wall.
+        // Strip, mood bar, chips, and the button are separate blocks; a blank
+        // row sets each off from the one above it so they don't read as one wall.
         let mut y = metadata_rect.y.saturating_add(1);
         let mut emitted = false;
         if !values.environment.is_empty() {
@@ -183,6 +198,18 @@ pub(crate) fn entry_metadata_layout(
                 height: chip_height,
                 ..metadata_rect
             });
+            y = y.saturating_add(chip_height);
+            emitted = true;
+        }
+        if show_button {
+            if emitted {
+                y = y.saturating_add(METADATA_ROW_GAP);
+            }
+            autofill_rect = Some(Rect {
+                y,
+                height: 1,
+                ..metadata_rect
+            });
         }
     }
 
@@ -192,6 +219,7 @@ pub(crate) fn entry_metadata_layout(
         environment: environment_rect,
         mood: mood_rect,
         chips: chips_rect,
+        autofill: autofill_rect,
     }
 }
 
@@ -357,11 +385,16 @@ pub(crate) fn metadata_value_rows(
     )
 }
 
-pub(crate) fn metadata_section_height(row_width: u16, values: EntryMetadataValues<'_>) -> u16 {
+pub(crate) fn metadata_section_height(
+    row_width: u16,
+    values: EntryMetadataValues<'_>,
+    show_button: bool,
+) -> u16 {
     let blocks = [
         env_strip_height(row_width, values.environment),
         values.mood.is_some() as u16,
         chips_height(row_width, values),
+        u16::from(show_button),
     ];
     let present = blocks.iter().filter(|height| **height > 0).count() as u16;
     if present == 0 {

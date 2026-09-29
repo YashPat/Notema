@@ -152,10 +152,12 @@ image.workspace = true
 indicatif.workspace = true
 jiff.workspace = true
 notema-analytics.workspace = true
+notema-autofill.workspace = true
 notema-context.workspace = true
 notema-domain.workspace = true
 notema-encryption.workspace = true
 notema-import.workspace = true
+notema-model.workspace = true
 notema-storage.workspace = true
 notema-timing.workspace = true
 notify.workspace = true
@@ -168,6 +170,7 @@ rayon.workspace = true
 rpassword.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 toml.workspace = true
 tree-sitter.workspace = true
 tree-sitter-bash.workspace = true
@@ -198,8 +201,8 @@ arboard = { version = "3", default-features = false }
 default = ["tls-ring"]
 # HTTPS only; journal encryption uses age. Mainstream builds use rustls/ring.
 # The SSE-free iSH artifact uses native-tls backed by a static i586 OpenSSL.
-tls-ring = ["notema-context/tls-ring", "notema-storage/tls-ring"]
-tls-native = ["notema-context/tls-native", "notema-storage/tls-native"]
+tls-ring = ["notema-context/tls-ring", "notema-storage/tls-ring", "notema-model/tls-ring"]
+tls-native = ["notema-context/tls-native", "notema-storage/tls-native", "notema-model/tls-native"]
 # Off by default: the standard build has no FUSE dependency and runs everywhere.
 # Enable for the dedicated macOS/Linux "-fuse" release artifacts (see Makefile.toml).
 fuse = ["dep:notema-fuse"]

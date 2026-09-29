@@ -1,3 +1,6 @@
+use std::sync::OnceLock;
+use std::time::Instant;
+
 use ratatui::{
     Frame,
     buffer::Buffer,
@@ -70,6 +73,7 @@ pub(super) fn draw_metadata_section(
     layout: EntryMetadataLayout,
     metadata: &EntryMetadata<'_>,
     hover: HoverTarget,
+    reading: bool,
 ) {
     let Some(area) = layout.metadata else {
         return;
@@ -78,6 +82,7 @@ pub(super) fn draw_metadata_section(
         HoverTarget::MetadataChip(index) => Some(index),
         _ => None,
     };
+    let button_hovered = matches!(hover, HoverTarget::Autofill);
     let sep = theme
         .env_glyphs()
         .rule
@@ -118,6 +123,13 @@ pub(super) fn draw_metadata_section(
             rect,
         );
     }
+
+    if let Some(rect) = layout.autofill {
+        frame.render_widget(
+            Paragraph::new(autofill_button_line(theme, reading, button_hovered)),
+            rect,
+        );
+    }
 }
 
 /// The environment strip as display lines, shared by the pinned and scrolling
@@ -153,8 +165,12 @@ pub(super) fn metadata_section_lines(
     theme: &Theme,
     width: u16,
     metadata: &EntryMetadata<'_>,
+    show_button: bool,
+    reading: bool,
+    button_hovered: bool,
 ) -> Vec<Line<'static>> {
-    if metadata.mood.is_none()
+    if !show_button
+        && metadata.mood.is_none()
         && metadata.feelings.is_empty()
         && metadata.people.is_empty()
         && metadata.activities.is_empty()
@@ -193,9 +209,40 @@ pub(super) fn metadata_section_lines(
             lines.push(Line::from(""));
         }
         lines.extend(chips);
+        emitted = true;
+    }
+    if show_button {
+        if emitted {
+            lines.push(Line::from(""));
+        }
+        lines.push(autofill_button_line(theme, reading, button_hovered));
     }
 
     lines
+}
+
+/// Bracket label, 10 cells inside the brackets so Autofill and Reading share
+/// one width. Flat chrome keeps the brackets. `reading` cycles the image
+/// viewer's 3-cell ellipsis off the wall clock.
+fn autofill_button_line(theme: &Theme, reading: bool, hovered: bool) -> Line<'static> {
+    let interior = if reading {
+        let dots = reading_dots();
+        format!("Reading{}{}", ".".repeat(dots), " ".repeat(3 - dots))
+    } else {
+        "Autofill  ".to_string()
+    };
+    let mut style = Style::default();
+    if hovered {
+        style = style.patch(theme.hover());
+    }
+    Line::from(Span::styled(format!("[ {interior} ]"), style))
+}
+
+/// Dots in the Reading label: `.  `, `.. `, `...`, advancing every 400ms.
+fn reading_dots() -> usize {
+    static START: OnceLock<Instant> = OnceLock::new();
+    let elapsed = START.get_or_init(Instant::now).elapsed();
+    (elapsed.as_millis() / 400 % 3) as usize + 1
 }
 
 /// The chip pills as display lines: one label-less flow across every category,

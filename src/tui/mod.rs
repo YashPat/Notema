@@ -1,4 +1,5 @@
 mod app;
+mod autofill;
 #[cfg(feature = "bench")]
 pub(crate) mod bench_support;
 mod clipboard;

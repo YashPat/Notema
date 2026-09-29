@@ -529,6 +529,12 @@ fn run_loop(
             events::Action::Background(events::BackgroundAction::PollEnvironment),
         )?;
         let context_ready = effects::execute(terminal, &mut app, context_outcome)?.redraw;
+        let autofill_ready = events::dispatch_action(
+            terminal,
+            &mut app,
+            events::Action::Background(events::BackgroundAction::PollAutofill),
+        )?
+        .redraw_without_effects();
         // Install a finished whole-library reload, or re-request one that
         // finished against a library the app has moved past.
         let library_reloaded = events::dispatch_action(
@@ -741,10 +747,12 @@ fn run_loop(
         let overlay_closed = overlay_was_visible && !overlay_visible;
         overlay_was_visible = overlay_visible;
 
-        // Repaint each tick while the viewer's image builds, or the "Fetching…"
-        // modal is up, so their loading ellipsis keeps animating.
+        // Repaint each tick while the viewer's image builds, a fill is in
+        // flight, or the "Fetching…" modal is up, so their loading ellipsis
+        // keeps animating.
         let animate_loading = (app.image_viewer_state().is_some()
             && app.image.runtime.has_pending())
+            || app.autofill.has_pending()
             || matches!(app.overlay, state::Overlay::FetchingEnvironment(_));
         // Repaint each tick while toasts are visible so the countdown line
         // shrinks continuously; the loop already wakes on the toast deadline.
@@ -760,6 +768,7 @@ fn run_loop(
             || images_ready
             || geocode_ready
             || context_ready
+            || autofill_ready
             || timers_changed
             || animate_loading
             || animate_toasts

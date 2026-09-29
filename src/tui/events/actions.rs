@@ -269,6 +269,11 @@ pub(super) fn save_internal_editor(app: &mut AppModel) -> AppResult<()> {
                 }
                 Err(error) => return Err(error),
             };
+            // The body is on disk now. A deferred fetch, a failed save, and a
+            // conflict that stored the buffer as a new entry leave the flag clear.
+            if text != original_body {
+                app.cancel_autofill_body(&path);
+            }
             finish_existing_edit(app, &path, &title, saved.outcome, &saved.assets)?;
             app.editor = None;
             if saved.outcome == EditOutcome::Deleted {
@@ -909,6 +914,159 @@ mod tests {
         let content = app.services.store.read_entry_content(&path).unwrap();
         assert!(content.contains("# Edited body"));
         assert!(content.contains("edited_at"));
+    }
+
+    fn park_selected_autofill(app: &mut AppModel) -> String {
+        let (id, journal, path, hash) = {
+            let entry = app.resolved_selected_entry().unwrap();
+            (
+                entry.id.clone(),
+                entry.journal.clone(),
+                entry.path.clone(),
+                crate::tui::features::autofill::body_hash(&entry.body),
+            )
+        };
+        app.autofill
+            .park(id.clone(), journal, path, hash, String::new());
+        id
+    }
+
+    #[test]
+    fn body_save_cancels_autofill_only_after_the_body_is_written() {
+        let (_dir, mut app, path) = app_with_entry("+++\nschema_version = 1\n+++\n\n# Original\n");
+        let id = park_selected_autofill(&mut app);
+        app.open_editor_for_selected().unwrap();
+        app.editor.as_mut().unwrap().textarea.insert_str("Edited ");
+
+        save_internal_editor(&mut app).unwrap();
+
+        assert!(app.autofill.is_cancelled(&id));
+        assert!(
+            app.services
+                .store
+                .read_entry_content(&path)
+                .unwrap()
+                .contains("Edited")
+        );
+    }
+
+    #[test]
+    fn metadata_only_save_leaves_autofill_running() {
+        let (_dir, mut app, _path) = app_with_entry("+++\nschema_version = 1\n+++\n\n# Original\n");
+        let id = park_selected_autofill(&mut app);
+        app.open_editor_for_selected().unwrap();
+        app.editor
+            .as_mut()
+            .unwrap()
+            .metadata
+            .people
+            .push("Sam".to_string());
+
+        save_internal_editor(&mut app).unwrap();
+
+        assert!(!app.autofill.is_cancelled(&id));
+        assert!(app.editor.is_none());
+    }
+
+    #[test]
+    fn deferred_body_save_leaves_autofill_running() {
+        use notema_domain::Location;
+
+        let (_dir, mut app, _path) = app_with_entry("+++\nschema_version = 1\n+++\n\n# Original\n");
+        let id = park_selected_autofill(&mut app);
+        app.open_editor_for_selected().unwrap();
+        let editor = app.editor.as_mut().unwrap();
+        editor.textarea.insert_str("Edited ");
+        editor.metadata.location = Some(Location {
+            latitude: Some(52.52),
+            longitude: Some(13.405),
+            ..Location::default()
+        });
+        editor.pending_environment = Some(1);
+
+        save_internal_editor(&mut app).unwrap();
+
+        assert!(!app.autofill.is_cancelled(&id));
+        assert!(app.editor.is_some());
+        assert!(matches!(
+            app.overlay,
+            crate::tui::state::Overlay::FetchingEnvironment(_)
+        ));
+    }
+
+    #[test]
+    fn failed_body_save_leaves_autofill_running() {
+        let (_dir, mut app, path) =
+            app_with_entry("+++\n[entry]\npeople = []\n+++\n\n# Original\n");
+        let id = park_selected_autofill(&mut app);
+        let target = app.selected_entry_target().unwrap();
+        let journal = app.resolved_selected_entry().unwrap().journal.clone();
+        let (_, revision) = app
+            .services
+            .store
+            .read_entry_with_revision(&journal, &path)
+            .unwrap();
+        let mut editor = EntryEditor::for_existing(
+            journal,
+            path,
+            target.title,
+            revision,
+            "# Edited body",
+            notema_domain::Metadata::default(),
+            Default::default(),
+        );
+        editor.original = "# Original".to_string();
+        editor.metadata.people.push("cannot-write".to_string());
+        app.editor = Some(editor);
+
+        assert!(save_internal_editor(&mut app).is_err());
+        assert!(!app.autofill.is_cancelled(&id));
+    }
+
+    #[test]
+    fn revision_conflict_copy_leaves_autofill_running() {
+        let (_dir, mut app, path) = app_with_entry("+++\nschema_version = 1\n+++\n\n# Original\n");
+        let id = park_selected_autofill(&mut app);
+        app.open_editor_for_selected().unwrap();
+        app.editor
+            .as_mut()
+            .unwrap()
+            .textarea
+            .insert_str("My long edit");
+        fs::write(&path, "+++\nschema_version = 1\n+++\n\n# External\n").unwrap();
+
+        save_internal_editor(&mut app).unwrap();
+
+        assert!(!app.autofill.is_cancelled(&id));
+        assert!(fs::read_to_string(&path).unwrap().contains("# External"));
+    }
+
+    #[test]
+    fn deleting_the_entry_cancels_autofill() {
+        let (_dir, mut app, _path) = app_with_entry("+++\nschema_version = 1\n+++\n\n# A\n");
+        let id = park_selected_autofill(&mut app);
+        let target = app.selected_entry_target().unwrap();
+        let journal = app.resolved_selected_entry().unwrap().journal.clone();
+        let (_, revision) = app
+            .services
+            .store
+            .read_entry_with_revision(&journal, &target.path)
+            .unwrap();
+        let mut editor = EntryEditor::for_existing(
+            journal,
+            target.path.clone(),
+            target.title,
+            revision,
+            "   \n  ",
+            notema_domain::Metadata::default(),
+            Default::default(),
+        );
+        editor.original = "# A\n".to_string();
+        app.editor = Some(editor);
+
+        save_internal_editor(&mut app).unwrap();
+
+        assert!(app.autofill.is_cancelled(&id));
     }
 
     #[test]

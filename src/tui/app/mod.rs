@@ -378,6 +378,8 @@ pub(crate) struct AppModel {
     /// Serves the editor prefetch and direct location-sets. Bulk enrichment of
     /// existing entries is the `notema backfill` CLI command's job, not the TUI's.
     pub(crate) environment: crate::tui::environment::EnvironmentWorker,
+    /// Serial autofill. An entry is tracked as soon as it is queued.
+    pub(crate) autofill: crate::tui::autofill::Autofill,
     /// Id counter for environment requests (editor fetches, direct
     /// location-set write-backs) — app-level so ids never repeat across editor
     /// sessions and a stale result can't be adopted by a later one.
@@ -417,6 +419,9 @@ pub(crate) struct ReaderHits {
     /// How many openable targets the drawn entry holds — see
     /// [`RenderedEntryBody::openable`]. Rides to the model with `hints`.
     pub(crate) openable: usize,
+    /// Body line of the Autofill label when metadata scrolls with the body.
+    /// `None` while the label is pinned below the body.
+    pub(crate) autofill_line: Option<usize>,
 }
 
 impl ReaderHits {
@@ -603,6 +608,7 @@ impl AppModel {
             queued_reload: None,
             geocode: crate::tui::geocode::GeocodeWorker::default(),
             environment: crate::tui::environment::EnvironmentWorker::default(),
+            autofill: crate::tui::autofill::Autofill::default(),
             next_environment_id: 0,
             next_geocode_id: 0,
             reader_anchor_flash: None,

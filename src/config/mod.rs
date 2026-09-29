@@ -92,7 +92,6 @@ impl ModelSection {
             && token_is_blank(&self.token)
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn is_configured(&self) -> bool {
         !self.base_url.trim().is_empty() && !self.model.trim().is_empty()
     }

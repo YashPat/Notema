@@ -82,9 +82,10 @@ pub(crate) fn metadata_scrolls_with_body(
     theme: &Theme,
     area: Rect,
     values: EntryMetadataValues<'_>,
+    show_button: bool,
 ) -> bool {
     let inner = PanelGeometry::new(theme, area).content;
-    let metadata_height = metadata_section_height(inner.width, values);
+    let metadata_height = metadata_section_height(inner.width, values, show_button);
     inner.height < MIN_ENTRY_BODY_LINES.saturating_add(metadata_height)
 }
 
@@ -111,12 +112,13 @@ impl EntryBodyFrame {
         area: Rect,
         values: EntryMetadataValues<'_>,
         body_layout: BodyLayout,
+        show_button: bool,
     ) -> Self {
-        let scrolls = metadata_scrolls_with_body(theme, area, values);
+        let scrolls = metadata_scrolls_with_body(theme, area, values, show_button);
         let (content, metadata) = if scrolls {
             (PanelGeometry::new(theme, area).content, None)
         } else {
-            let layout = entry_metadata_layout(theme, area, values);
+            let layout = entry_metadata_layout(theme, area, values, show_button);
             (layout.content, Some(layout))
         };
         // Scrolling metadata shares the body's paragraph, so it renders uncapped

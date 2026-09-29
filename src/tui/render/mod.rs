@@ -91,9 +91,7 @@ pub(crate) use insights::insights_tab_at;
 pub(crate) use journals::JOURNAL_BOX_HEIGHT;
 use journals::draw_journals;
 pub(crate) use journals::{journal_list_rect, journal_row_height};
-#[cfg(test)]
-use layout::metadata_scrolls_with_body;
-pub(crate) use layout::{TuiLayout, tui_layout};
+pub(crate) use layout::{TuiLayout, metadata_scrolls_with_body, tui_layout};
 #[cfg(test)]
 pub(crate) use menus::help_dialog_layout;
 pub(crate) use menus::{draw_editor_shortcuts, draw_metadata_menu};

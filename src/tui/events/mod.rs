@@ -276,6 +276,7 @@ fn apply_action<B: Backend>(
         }
         Action::Insights(action) => handlers::insights(app, action),
         Action::Filter(action) => handlers::filter(terminal, app, action)?,
+        Action::Autofill => app.press_autofill()?,
     }
 
     // One-shot compose (`notema log` with no body) quits as soon as its editor
@@ -317,6 +318,7 @@ fn apply_background_action(app: &mut AppModel, action: BackgroundAction) -> Disp
         BackgroundAction::PollImages => app.image.runtime.poll_results(),
         BackgroundAction::PollGeocode => app.apply_geocode_results(),
         BackgroundAction::PollEnvironment => app.apply_environment_results(),
+        BackgroundAction::PollAutofill => app.apply_autofill_results(),
         BackgroundAction::PollLibraryReload => app.apply_library_reload_results(),
         BackgroundAction::PollTimers => {
             let toasts_expired = app.expire_toasts();

@@ -3,7 +3,8 @@
 //! The blocking HTTP shared by the network callers: context provider lookups
 //! (geocoding, weather, air quality), remote asset download, and chat
 //! completions. One process-wide `ureq` agent, a global timeout, a short
-//! connect cap, and a per-call bound on the response body.
+//! connect cap, and a per-call bound on the response body. [`post`] raises the
+//! global timeout for one call. The connect cap stays [`CONNECT_TIMEOUT`].
 
 use std::{path::Path, sync::OnceLock, sync::mpsc, thread, time::Duration};
 
@@ -30,7 +31,7 @@ pub enum HttpError {
 
 /// Fetch `url` as a UTF-8 string, reading at most `max_bytes` of body.
 pub fn get_string(url: &str, max_bytes: u64) -> Result<String, HttpError> {
-    run(url, move |url| {
+    run(url, TIMEOUT, move |url| {
         Ok(agent()
             .get(url)
             .header("User-Agent", USER_AGENT)
@@ -52,13 +53,48 @@ pub fn post_string(
     body: &str,
     max_bytes: u64,
 ) -> Result<String, HttpError> {
+    send_post(url, headers, body, max_bytes, TIMEOUT, false)
+}
+
+/// POST `body` to `url` and read the response as UTF-8, at most `max_bytes`,
+/// with `timeout` as the whole-request budget.
+///
+/// The connect cap stays [`CONNECT_TIMEOUT`]. On iSH the agent carries no socket
+/// timeout, and `timeout` is the wait enforced around the request.
+pub fn post(
+    url: &str,
+    headers: &[(&str, &str)],
+    body: &str,
+    max_bytes: u64,
+    timeout: Duration,
+) -> Result<String, HttpError> {
+    send_post(url, headers, body, max_bytes, timeout, true)
+}
+
+fn send_post(
+    url: &str,
+    headers: &[(&str, &str)],
+    body: &str,
+    max_bytes: u64,
+    timeout: Duration,
+    per_request: bool,
+) -> Result<String, HttpError> {
     let headers: Vec<(String, String)> = headers
         .iter()
         .map(|(key, value)| (key.to_string(), value.to_string()))
         .collect();
     let body = body.to_string();
-    run(url, move |url| {
-        let mut request = agent().post(url).header("User-Agent", USER_AGENT);
+    let per_request = per_request && !is_ish();
+    run(url, timeout, move |url| {
+        let mut request = agent().post(url);
+        if per_request {
+            request = request
+                .config()
+                .timeout_global(Some(timeout))
+                .timeout_connect(Some(CONNECT_TIMEOUT))
+                .build();
+        }
+        request = request.header("User-Agent", USER_AGENT);
         for (key, value) in &headers {
             request = request.header(key, value);
         }
@@ -73,7 +109,7 @@ pub fn post_string(
 
 /// Fetch `url` as bytes, reading at most `max_bytes` of body.
 pub fn get_bytes(url: &str, max_bytes: u64) -> Result<Vec<u8>, HttpError> {
-    run(url, move |url| {
+    run(url, TIMEOUT, move |url| {
         Ok(agent()
             .get(url)
             .header("User-Agent", USER_AGENT)
@@ -85,10 +121,11 @@ pub fn get_bytes(url: &str, max_bytes: u64) -> Result<Vec<u8>, HttpError> {
     })
 }
 
-/// Run `fetch`, enforcing [`TIMEOUT`] in user space on iSH, where the agent has
+/// Run `fetch`, enforcing `timeout` in user space on iSH, where the agent has
 /// no timeout of its own (see [`agent_config_for`]).
 fn run<T: Send + 'static>(
     url: &str,
+    timeout: Duration,
     fetch: impl FnOnce(&str) -> Result<T, HttpError> + Send + 'static,
 ) -> Result<T, HttpError> {
     if !is_ish() {
@@ -99,9 +136,9 @@ fn run<T: Send + 'static>(
     thread::spawn(move || {
         let _ = tx.send(fetch(&url));
     });
-    match rx.recv_timeout(TIMEOUT) {
+    match rx.recv_timeout(timeout) {
         Ok(result) => result,
-        Err(mpsc::RecvTimeoutError::Timeout) => Err(HttpError::TimedOut(TIMEOUT)),
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(HttpError::TimedOut(timeout)),
         Err(mpsc::RecvTimeoutError::Disconnected) => Err(HttpError::WorkerLost),
     }
 }

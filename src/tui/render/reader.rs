@@ -134,11 +134,13 @@ fn draw_markdown_panel(
         focused,
         Some(count_label(word_count, "word", "words")),
     );
+    let (show_button, reading) = app.reader_autofill_state(metadata.values());
     let frame_layout = EntryBodyFrame::new(
         active_theme,
         area,
         metadata.values(),
         app.services.config.ui.layout.reader_body(),
+        show_button,
     );
     let body_rect = frame_layout.body;
 
@@ -215,18 +217,32 @@ fn draw_markdown_panel(
             }
         }
     }
+    let mut autofill_line = None;
     if frame_layout.metadata_scrolls() {
-        let meta_lines = metadata_section_lines(active_theme, body_rect.width, &metadata);
+        let meta_lines = metadata_section_lines(
+            active_theme,
+            body_rect.width,
+            &metadata,
+            show_button,
+            reading,
+            matches!(app.hover, HoverTarget::Autofill),
+        );
         if !meta_lines.is_empty() {
             let height = body_rect.height as usize;
-            if lines.len() + meta_lines.len() < height {
+            let meta_start = if lines.len() + meta_lines.len() < height {
                 // Fits: bottom-attach the metadata to the pane's bottom edge,
                 // matching the pinned layout on taller panes.
-                lines.resize(height - meta_lines.len(), Line::from(""));
+                let start = height - meta_lines.len();
+                lines.resize(start, Line::from(""));
+                start
             } else {
                 // Overflows: one blank line sets the metadata off from the body as
                 // it scrolls into view.
                 lines.push(Line::from(""));
+                lines.len()
+            };
+            if show_button {
+                autofill_line = Some(meta_start + meta_lines.len() - 1);
             }
             lines.extend(meta_lines);
         }
@@ -252,6 +268,7 @@ fn draw_markdown_panel(
         headings,
         hints: Vec::new(),
         openable: body.openable,
+        autofill_line,
     };
     // The chips are already drawn — they are text in the body.
     hits.hints = body
@@ -265,7 +282,7 @@ fn draw_markdown_panel(
         .collect();
 
     if let Some(layout) = frame_layout.metadata {
-        draw_metadata_section(active_theme, frame, layout, &metadata, app.hover);
+        draw_metadata_section(active_theme, frame, layout, &metadata, app.hover, reading);
     }
 
     render_scrollbar_if_needed(

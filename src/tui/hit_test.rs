@@ -77,8 +77,9 @@ pub(crate) fn metadata_at_point(
     x: u16,
     y: u16,
     values: EntryMetadataValues<'_>,
+    show_button: bool,
 ) -> Option<(MetadataChip, String)> {
-    let layout = entry_metadata_layout(theme, reader_area, values);
+    let layout = entry_metadata_layout(theme, reader_area, values, show_button);
     let (category, value) = chip_at(layout.chips?, x, y, values)?;
     let chip = match category {
         PillCategory::Feelings => MetadataChip::Feelings,
@@ -97,7 +98,8 @@ pub(crate) fn metadata_chip_index_at(
     x: u16,
     y: u16,
     values: EntryMetadataValues<'_>,
+    show_button: bool,
 ) -> Option<usize> {
-    let layout = entry_metadata_layout(theme, reader_area, values);
+    let layout = entry_metadata_layout(theme, reader_area, values, show_button);
     chip_index_at(layout.chips?, x, y, values)
 }

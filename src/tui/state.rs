@@ -90,6 +90,8 @@ pub(crate) enum HoverTarget {
     /// A clickable metadata chip in the pinned reader footer, by its flat index
     /// in the pill flow (feelings, people, activities, tags).
     MetadataChip(usize),
+    /// The autofill button in the pinned reader metadata block.
+    Autofill,
     /// A single-line text field, identified by the rect it was last drawn
     /// into (fields carry no other identity; only one can be hovered).
     TextField(ratatui::layout::Rect),

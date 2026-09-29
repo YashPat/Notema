@@ -28,6 +28,9 @@ pub(super) fn poll_timeout(
     if app.environment.has_pending() {
         timeout = timeout.min(Duration::from_millis(100));
     }
+    if app.autofill.has_pending() {
+        timeout = timeout.min(Duration::from_millis(100));
+    }
     if app.library_reload.has_pending() {
         timeout = timeout.min(Duration::from_millis(100));
     }

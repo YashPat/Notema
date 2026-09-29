@@ -232,6 +232,14 @@ impl ViewState {
             && row < rect.y.saturating_add(rect.height))
         .then(|| self.reader.scroll as usize + (row - rect.y) as usize)
     }
+
+    /// The Autofill label drawn inside the scrolling body, the whole content row.
+    pub(crate) fn reader_autofill_at(&self, col: u16, row: u16) -> bool {
+        let Some(line) = self.reader.autofill_line else {
+            return false;
+        };
+        self.reader_body_line_at(col, row) == Some(line)
+    }
 }
 
 #[cfg(test)]
@@ -281,6 +289,7 @@ mod tests {
                 headings: Vec::new(),
                 openable: 0,
                 hints: Vec::new(),
+                autofill_line: None,
             },
             ..ViewState::default()
         };
@@ -315,6 +324,7 @@ mod tests {
             headings: Vec::new(),
             openable: 0,
             hints: Vec::new(),
+            autofill_line: None,
         };
 
         let visible: Vec<_> = hits.visible_links().map(|(_, rect)| rect).collect();

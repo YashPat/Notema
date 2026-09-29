@@ -159,14 +159,19 @@ fn pinned_and_scrolling_mood_rows_agree_on_a_narrow_pane() {
     // Tall enough to pin the block, narrow enough to lose the labels.
     let area = Rect::new(0, 0, 22, 40);
     let pinned = render_to_text(area.width, area.height, |frame| {
-        let layout =
-            crate::tui::surface::entry_metadata_layout(&theme, area, entry_metadata.values());
+        let layout = crate::tui::surface::entry_metadata_layout(
+            &theme,
+            area,
+            entry_metadata.values(),
+            false,
+        );
         super::metadata::draw_metadata_section(
             &theme,
             frame,
             layout,
             &entry_metadata,
             crate::tui::state::HoverTarget::None,
+            false,
         );
     });
     assert!(!pinned.contains("Miserable"), "pinned row was:\n{pinned}");
@@ -191,29 +196,43 @@ fn reader_and_editor_frame_the_body_the_same() {
         Rect::new(0, 0, 120, 12),
     ] {
         let layout = crate::config::LayoutSection::default();
+        // Mood is set and the lists are empty, so the Reader keeps the button
+        // row and the editor leaves it out.
         let reader = super::layout::EntryBodyFrame::new(
             &theme,
             area,
             entry_metadata.values(),
             layout.reader_body(),
+            true,
         );
         let editor = super::layout::EntryBodyFrame::new(
             &theme,
             area,
             entry_metadata.values(),
             layout.editor_body(),
+            false,
         );
-        assert_eq!(reader.body, editor.body, "body rect differs at {area:?}");
-        assert_eq!(
-            reader.metadata_scrolls(),
-            editor.metadata_scrolls(),
-            "metadata placement differs at {area:?}"
-        );
-        assert_eq!(
-            reader.top_pad(1),
-            editor.top_pad(1),
-            "top padding differs at {area:?}"
-        );
+        if let Some(metadata) = editor.metadata {
+            assert!(
+                metadata.autofill.is_none(),
+                "editor frame includes the autofill row at {area:?}"
+            );
+        }
+        if let Some(metadata) = reader.metadata {
+            assert!(
+                metadata.autofill.is_some(),
+                "reader frame drops the autofill row at {area:?}"
+            );
+        }
+        if reader.metadata_scrolls() {
+            assert!(editor.metadata_scrolls());
+            assert_eq!(reader.body, editor.body, "body rect differs at {area:?}");
+            assert_eq!(
+                reader.top_pad(1),
+                editor.top_pad(1),
+                "top padding differs at {area:?}"
+            );
+        }
     }
 }
 
@@ -235,8 +254,13 @@ fn top_padding_outranks_centering_on_a_long_body() {
     // The reader centers by default; match it so both surfaces are exercised.
     layout.editor.body_center_vertically = Some(true);
     for body_layout in [layout.reader_body(), layout.editor_body()] {
-        let frame =
-            super::layout::EntryBodyFrame::new(&theme, area, entry_metadata.values(), body_layout);
+        let frame = super::layout::EntryBodyFrame::new(
+            &theme,
+            area,
+            entry_metadata.values(),
+            body_layout,
+            false,
+        );
         let height = frame.body.height as usize;
         // A body filling the pane never centers, so this is the ramp itself.
         let ramp = frame.top_pad(height);
