@@ -84,6 +84,7 @@ Mood is an integer from {mood_start} to {mood_end}.
 People already used: {people_json}
 Activities already used: {activities_json}
 Reuse a name from those lists when it is the same person, or same activity. Add a new name only when it is worth adding.
+An activity is something they would look up later, like hiking or coding. A meal, an errand, a commute, or a routine chore is not an activity.
 Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
     )
 }
@@ -500,6 +501,16 @@ mod tests {
         assert!(prompt.system.contains(
             "Reuse a name from those lists when it is the same person, or same activity."
         ));
+        assert!(
+            prompt.system.contains(
+                "An activity is something they would look up later, like hiking or coding."
+            )
+        );
+        assert!(
+            prompt
+                .system
+                .contains("A meal, an errand, a commute, or a routine chore is not an activity.")
+        );
         assert!(prompt.system.contains(
             "Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
         ));
