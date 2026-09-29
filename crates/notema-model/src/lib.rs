@@ -128,9 +128,9 @@ pub fn fetch_ollama_tags() -> Result<Vec<String>, ModelError> {
 /// Build the `POST /v1/chat/completions` call for `model`.
 ///
 /// `schema` is embedded as the caller passed it. The schema name is always
-/// `response`. An Ollama base URL also sets `reasoning_effort` to `low`:
-/// thinking models think unless told otherwise, and `low` is the shortest
-/// level all of them accept.
+/// `response`. An Ollama base URL also sets `reasoning_effort` to `none`.
+/// Thinking models think unless told otherwise, and this call only needs
+/// the JSON object.
 pub fn completion_request(
     model: &ChatModel,
     messages: &[ChatMessage],
@@ -161,7 +161,7 @@ pub fn completion_request(
         },
     });
     if is_ollama(&model.base_url) {
-        body["reasoning_effort"] = json!("low");
+        body["reasoning_effort"] = json!("none");
     }
     CompletionRequest {
         url: completions_url(&model.base_url),
@@ -316,7 +316,7 @@ mod tests {
             request.body["response_format"]["json_schema"]["schema"],
             schema()
         );
-        assert_eq!(request.body["reasoning_effort"], "low");
+        assert_eq!(request.body["reasoning_effort"], "none");
     }
 
     #[test]
@@ -332,7 +332,7 @@ mod tests {
         let mut configured = model(None);
         configured.base_url = "http://127.0.0.1:11434/v1/".to_string();
         let request = completion_request(&configured, &messages(), &schema());
-        assert_eq!(request.body["reasoning_effort"], "low");
+        assert_eq!(request.body["reasoning_effort"], "none");
     }
 
     #[test]
