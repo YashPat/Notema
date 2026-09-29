@@ -926,8 +926,14 @@ mod tests {
                 crate::tui::features::autofill::body_hash(&entry.body),
             )
         };
+        let revision = app
+            .services
+            .store
+            .read_entry_with_revision(&journal, &path)
+            .unwrap()
+            .1;
         app.autofill
-            .park(id.clone(), journal, path, hash, String::new());
+            .park(id.clone(), journal, path, hash, String::new(), revision);
         id
     }
 

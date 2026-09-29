@@ -33,6 +33,12 @@ pub struct AutofillDecision {
     pub outcome: String,
 }
 
+/// The response was not a JSON object autofill can read.
+pub const UNREADABLE_REPLY: &str = "Couldn't read the reply";
+
+/// The response parsed, and no empty field is worth writing.
+pub const NOTHING_TO_ADD: &str = "Nothing to add";
+
 /// The system string, the entry string, and the JSON schema for one autofill call.
 ///
 /// The caller maps `system` and `entry` onto chat messages. This crate does not
@@ -155,11 +161,11 @@ fn response_schema() -> Value {
 ///
 /// Strips one wrapping code fence, then reads
 /// `{"feelings":[...],"people":[...],"activities":[...],"mood":N}`.
-/// A failed parse, or a reply with nothing valid left to write, yields
-/// [`AutofillDecision`] with every field [`None`] and outcome `Autofill failed`.
+/// A failed parse yields every field [`None`] and outcome [`UNREADABLE_REPLY`].
+/// A parsed reply with nothing valid left to write uses [`NOTHING_TO_ADD`].
 pub fn decide_autofill(current: &CurrentFields, response: &str) -> AutofillDecision {
     let Some(object) = model_object(response) else {
-        return failed();
+        return failed(UNREADABLE_REPLY);
     };
 
     let feelings = assign_list(
@@ -193,7 +199,7 @@ pub fn decide_autofill(current: &CurrentFields, response: &str) -> AutofillDecis
         names.push("mood");
     }
     if names.is_empty() {
-        return failed();
+        return failed(NOTHING_TO_ADD);
     }
 
     AutofillDecision {
@@ -205,13 +211,13 @@ pub fn decide_autofill(current: &CurrentFields, response: &str) -> AutofillDecis
     }
 }
 
-fn failed() -> AutofillDecision {
+fn failed(outcome: &str) -> AutofillDecision {
     AutofillDecision {
         feelings: None,
         people: None,
         activities: None,
         mood: None,
-        outcome: "Autofill failed".to_string(),
+        outcome: outcome.to_string(),
     }
 }
 
@@ -376,7 +382,17 @@ mod tests {
         assert_eq!(decision.people, None);
         assert_eq!(decision.activities, None);
         assert_eq!(decision.mood, None);
-        assert_eq!(decision.outcome, "Autofill failed");
+        assert_eq!(decision.outcome, UNREADABLE_REPLY);
+    }
+
+    #[test]
+    fn parsed_reply_with_nothing_to_write() {
+        let decision = decide("{\"feelings\":[],\"people\":[],\"activities\":[],\"mood\":null}");
+        assert_eq!(decision.feelings, None);
+        assert_eq!(decision.people, None);
+        assert_eq!(decision.activities, None);
+        assert_eq!(decision.mood, None);
+        assert_eq!(decision.outcome, NOTHING_TO_ADD);
     }
 
     #[test]
@@ -417,7 +433,7 @@ mod tests {
     #[test]
     fn prose_around_a_fence_fails() {
         let decision = decide("here you go\n```json\n{\"mood\":1}\n```");
-        assert_eq!(decision.outcome, "Autofill failed");
+        assert_eq!(decision.outcome, UNREADABLE_REPLY);
         assert_eq!(decision.mood, None);
     }
 

@@ -29,6 +29,62 @@ pub enum HttpError {
     WorkerLost,
 }
 
+impl HttpError {
+    /// The status ureq raises for a 4xx or 5xx response, before the body is read.
+    pub fn status_code(&self) -> Option<u16> {
+        match self {
+            HttpError::Transport(ureq::Error::StatusCode(code)) => Some(*code),
+            _ => None,
+        }
+    }
+
+    /// Timeout, connect, DNS, TLS, a body over the limit, or the iSH helper.
+    /// A status code is not unreachable.
+    pub fn is_unreachable(&self) -> bool {
+        match self {
+            HttpError::TimedOut(_) | HttpError::WorkerLost => true,
+            HttpError::Transport(error) => ureq_unreachable(error),
+        }
+    }
+
+    /// The transport error ureq raises for `code` before the body is read.
+    pub fn from_status_code(code: u16) -> Self {
+        HttpError::Transport(ureq::Error::StatusCode(code))
+    }
+}
+
+fn ureq_unreachable(error: &ureq::Error) -> bool {
+    match error {
+        ureq::Error::Timeout(_)
+        | ureq::Error::HostNotFound
+        | ureq::Error::ConnectionFailed
+        | ureq::Error::ConnectProxyFailed(_)
+        | ureq::Error::Tls(_)
+        | ureq::Error::TlsRequired
+        | ureq::Error::BodyExceedsLimit(_) => true,
+        ureq::Error::Io(io) => matches!(
+            io.kind(),
+            std::io::ErrorKind::TimedOut
+                | std::io::ErrorKind::ConnectionRefused
+                | std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::NotConnected
+                | std::io::ErrorKind::BrokenPipe
+                | std::io::ErrorKind::NetworkUnreachable
+                | std::io::ErrorKind::HostUnreachable
+                | std::io::ErrorKind::AddrNotAvailable
+                | std::io::ErrorKind::NetworkDown
+        ),
+        #[cfg(feature = "tls-ring")]
+        ureq::Error::Rustls(_) => true,
+        #[cfg(feature = "tls-native")]
+        ureq::Error::NativeTls(_) | ureq::Error::Der(_) => true,
+        #[cfg(any(feature = "tls-ring", feature = "tls-native"))]
+        ureq::Error::Pem(_) => true,
+        _ => false,
+    }
+}
+
 /// Fetch `url` as a UTF-8 string, reading at most `max_bytes` of body.
 pub fn get_string(url: &str, max_bytes: u64) -> Result<String, HttpError> {
     run(url, TIMEOUT, move |url| {
@@ -194,6 +250,20 @@ mod tests {
         let config = super::agent_config_for(true);
         assert!(!config.no_delay());
         assert_eq!(config.timeouts().global, None);
+    }
+
+    #[test]
+    fn status_code_is_not_unreachable() {
+        let error = super::HttpError::from_status_code(401);
+        assert_eq!(error.status_code(), Some(401));
+        assert!(!error.is_unreachable());
+    }
+
+    #[test]
+    fn a_timeout_is_unreachable() {
+        let error = super::HttpError::Transport(ureq::Error::Timeout(ureq::Timeout::Global));
+        assert_eq!(error.status_code(), None);
+        assert!(error.is_unreachable());
     }
 
     #[test]

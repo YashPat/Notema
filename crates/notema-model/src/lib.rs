@@ -217,6 +217,30 @@ pub enum ModelError {
     Unreadable,
 }
 
+impl ModelError {
+    /// The HTTP status ureq raises before the body is read.
+    pub fn status_code(&self) -> Option<u16> {
+        match self {
+            ModelError::Transport(error) => error.status_code(),
+            ModelError::Unreadable => None,
+        }
+    }
+
+    /// Timeout, connect, DNS, TLS, a body over the limit, or the iSH helper.
+    /// Status codes are excluded.
+    pub fn is_unreachable(&self) -> bool {
+        match self {
+            ModelError::Transport(error) => error.is_unreachable(),
+            ModelError::Unreadable => false,
+        }
+    }
+
+    /// Transport error for an HTTP status raised before the body is read.
+    pub fn from_status_code(code: u16) -> Self {
+        ModelError::Transport(notema_http::HttpError::from_status_code(code))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -380,5 +404,18 @@ mod tests {
             parse_ollama_tags(r#"{"models":[{"name":"llama"#),
             Err(ModelError::Unreadable)
         ));
+    }
+
+    #[test]
+    fn a_status_is_not_an_unreachable_transport() {
+        let denied = ModelError::from_status_code(401);
+        assert_eq!(denied.status_code(), Some(401));
+        assert!(!denied.is_unreachable());
+
+        let timed_out =
+            ModelError::Transport(notema_http::HttpError::TimedOut(Duration::from_secs(1)));
+        assert_eq!(timed_out.status_code(), None);
+        assert!(timed_out.is_unreachable());
+        assert!(!ModelError::Unreadable.is_unreachable());
     }
 }

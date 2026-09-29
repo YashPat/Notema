@@ -11,6 +11,7 @@ use std::{
 };
 
 use notema_model::{ChatMessage, ChatModel, ModelError};
+use notema_storage::EntryRevision;
 use serde_json::Value;
 
 use crate::tui::runtime::worker::Worker;
@@ -57,6 +58,9 @@ pub(crate) struct Job {
     pub(crate) journal: String,
     pub(crate) path: PathBuf,
     pub(crate) body_hash: [u8; 32],
+    /// File revision when autofill started. A later metadata edit keeps the
+    /// body hash and still conflicts on save.
+    pub(crate) revision: EntryRevision,
     pub(crate) prefix: String,
     pub(crate) cancel: Arc<AtomicBool>,
     /// Taken when the request is posted. A second entry keeps its request here
@@ -136,12 +140,14 @@ impl Autofill {
         path: PathBuf,
         body_hash: [u8; 32],
         prefix: String,
+        revision: EntryRevision,
     ) {
         self.jobs.push_back(Job {
             id,
             journal,
             path,
             body_hash,
+            revision,
             prefix,
             cancel: Arc::new(AtomicBool::new(false)),
             request: None,

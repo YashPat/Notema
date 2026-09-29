@@ -7,9 +7,11 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use notema_autofill::{CurrentFields, autofill_prompt, decide_autofill};
+use notema_autofill::{
+    CurrentFields, NOTHING_TO_ADD, UNREADABLE_REPLY, autofill_prompt, decide_autofill,
+};
 use notema_domain::{Entry, MetadataField};
-use notema_model::{ChatMessage, ChatModel, Role};
+use notema_model::{ChatMessage, ChatModel, ModelError, Role};
 use notema_storage::EntryEdit;
 use sha2::{Digest, Sha256};
 
@@ -57,7 +59,7 @@ impl AppModel {
         }
         let journal = entry.journal.clone();
         let path = entry.path.clone();
-        let (entry, _) = self
+        let (entry, revision) = self
             .services
             .store
             .read_entry_with_revision(&journal, &path)?;
@@ -99,6 +101,7 @@ impl AppModel {
             journal,
             path,
             body_hash,
+            revision,
             prefix,
             cancel,
             request: Some(request),
@@ -138,12 +141,12 @@ impl AppModel {
             if job.cancel.load(Ordering::Acquire) {
                 self.toast(
                     ToastVariant::Info,
-                    autofill_toast(&job.prefix, "Entry changed — press again to fill"),
+                    autofill_toast(&job.prefix, ENTRY_CHANGED),
                 );
             } else {
                 self.toast(
                     ToastVariant::Error,
-                    autofill_toast(&job.prefix, "Autofill failed"),
+                    autofill_toast(&job.prefix, AUTOFILL_FAILED),
                 );
             }
         }
@@ -156,15 +159,20 @@ impl AppModel {
         };
         match self.settle_autofill(job, result.assistant) {
             FillEnd::Changed { prefix } => {
-                self.toast(
-                    ToastVariant::Info,
-                    autofill_toast(&prefix, "Entry changed — press again to fill"),
-                );
+                self.toast(ToastVariant::Info, autofill_toast(&prefix, ENTRY_CHANGED));
             }
-            FillEnd::Failed { prefix } => {
+            FillEnd::Failed {
+                prefix,
+                message,
+                info,
+            } => {
                 self.toast(
-                    ToastVariant::Error,
-                    autofill_toast(&prefix, "Autofill failed"),
+                    if info {
+                        ToastVariant::Info
+                    } else {
+                        ToastVariant::Error
+                    },
+                    autofill_toast(&prefix, &message),
                 );
             }
             FillEnd::Filled { prefix, outcome } => {
@@ -185,28 +193,32 @@ impl AppModel {
             return FillEnd::Changed { prefix };
         }
         let Some(assistant) = assistant else {
-            return FillEnd::Failed { prefix };
+            return FillEnd::failed(prefix, AUTOFILL_FAILED);
         };
         let text = match assistant {
             Ok(text) => text,
-            Err(_) => return FillEnd::Failed { prefix },
+            Err(error) => return FillEnd::failed(prefix, completion_reason(&error)),
         };
         match self.write_autofill(&job, &text) {
             WriteAutofill::Changed => FillEnd::Changed { prefix },
-            WriteAutofill::Failed => FillEnd::Failed { prefix },
+            WriteAutofill::Failed { message, info } => FillEnd::Failed {
+                prefix,
+                message,
+                info,
+            },
             WriteAutofill::Filled(outcome) => FillEnd::Filled { prefix, outcome },
             WriteAutofill::ReloadFailed => FillEnd::ReloadFailed,
         }
     }
 
     fn write_autofill(&mut self, job: &Job, text: &str) -> WriteAutofill {
-        let (entry, revision) = match self
+        let (entry, _) = match self
             .services
             .store
             .read_entry_with_revision(&job.journal, &job.path)
         {
             Ok(pair) => pair,
-            Err(_) => return WriteAutofill::Failed,
+            Err(_) => return WriteAutofill::save_failed(),
         };
         if body_hash(&entry.body) != job.body_hash || job.cancel.load(Ordering::Acquire) {
             return WriteAutofill::Changed;
@@ -217,7 +229,10 @@ impl AppModel {
             && decision.activities.is_none()
             && decision.mood.is_none()
         {
-            return WriteAutofill::Failed;
+            return WriteAutofill::Failed {
+                info: decision.outcome == NOTHING_TO_ADD,
+                message: decision.outcome,
+            };
         }
 
         let original = entry.metadata_bundle();
@@ -238,7 +253,7 @@ impl AppModel {
         let extra: &[MetadataField] = &[];
         let saved = self.services.store.save_entry_edit_if_revision(
             &job.path,
-            revision,
+            job.revision,
             EntryEdit {
                 body: &body,
                 metadata: &metadata,
@@ -252,8 +267,12 @@ impl AppModel {
                 replace_offline: false,
             },
         );
-        if saved.is_err() {
-            return WriteAutofill::Failed;
+        if let Err(error) = saved {
+            return if is_revision_conflict(&error) {
+                WriteAutofill::Changed
+            } else {
+                WriteAutofill::save_failed()
+            };
         }
         let path = job.path.clone();
         if let Err(error) = self.refresh_paths(&[path]) {
@@ -267,18 +286,82 @@ impl AppModel {
     }
 }
 
+const ENTRY_CHANGED: &str = "Entry changed — press again to fill";
+const COULDNT_REACH: &str = "Couldn't reach the model";
+const COULDNT_SAVE: &str = "Couldn't save the fill";
+const AUTOFILL_FAILED: &str = "Autofill failed";
+
 enum FillEnd {
-    Changed { prefix: String },
-    Failed { prefix: String },
-    Filled { prefix: String, outcome: String },
+    Changed {
+        prefix: String,
+    },
+    Failed {
+        prefix: String,
+        message: String,
+        info: bool,
+    },
+    Filled {
+        prefix: String,
+        outcome: String,
+    },
     ReloadFailed,
+}
+
+impl FillEnd {
+    fn failed(prefix: String, message: &str) -> Self {
+        FillEnd::Failed {
+            prefix,
+            message: message.to_string(),
+            info: false,
+        }
+    }
 }
 
 enum WriteAutofill {
     Changed,
-    Failed,
+    Failed { message: String, info: bool },
     Filled(String),
     ReloadFailed,
+}
+
+impl WriteAutofill {
+    fn save_failed() -> Self {
+        WriteAutofill::Failed {
+            message: COULDNT_SAVE.to_string(),
+            info: false,
+        }
+    }
+}
+
+fn completion_reason(error: &ModelError) -> &'static str {
+    if let Some(code) = error.status_code() {
+        return status_reason(code);
+    }
+    if error.is_unreachable() {
+        return COULDNT_REACH;
+    }
+    match error {
+        ModelError::Unreadable => UNREADABLE_REPLY,
+        ModelError::Transport(_) => AUTOFILL_FAILED,
+    }
+}
+
+fn status_reason(code: u16) -> &'static str {
+    match code {
+        401 | 403 => "Key was declined",
+        404 => "Model not found",
+        429 | 503 => "Model is busy — try again",
+        400..=499 => "Model didn't accept it",
+        500..=599 => COULDNT_REACH,
+        _ => AUTOFILL_FAILED,
+    }
+}
+
+fn is_revision_conflict(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<notema_storage::StorageError>(),
+        Some(notema_storage::StorageError::EntryRevisionConflict { .. })
+    )
 }
 
 fn autofill_toast(prefix: &str, message: &str) -> String {
@@ -392,8 +475,14 @@ mod tests {
                 autofill_prefix(entry),
             )
         };
+        let revision = app
+            .services
+            .store
+            .read_entry_with_revision(&journal, &path)
+            .unwrap()
+            .1;
         app.autofill
-            .park(id.clone(), journal, path, hash, prefix.clone());
+            .park(id.clone(), journal, path, hash, prefix.clone(), revision);
         (id, prefix)
     }
 
@@ -404,6 +493,45 @@ mod tests {
                 r#"{"feelings":[],"people":["Sam"],"activities":[],"mood":null}"#.to_string(),
             )),
         }
+    }
+
+    #[test]
+    fn completion_reasons_follow_the_status() {
+        assert_eq!(
+            completion_reason(&ModelError::from_status_code(401)),
+            "Key was declined"
+        );
+        assert_eq!(
+            completion_reason(&ModelError::from_status_code(403)),
+            "Key was declined"
+        );
+        assert_eq!(
+            completion_reason(&ModelError::from_status_code(404)),
+            "Model not found"
+        );
+        assert_eq!(
+            completion_reason(&ModelError::from_status_code(429)),
+            "Model is busy — try again"
+        );
+        assert_eq!(
+            completion_reason(&ModelError::from_status_code(503)),
+            "Model is busy — try again"
+        );
+        assert_eq!(
+            completion_reason(&ModelError::from_status_code(400)),
+            "Model didn't accept it"
+        );
+        assert_eq!(
+            completion_reason(&ModelError::from_status_code(502)),
+            COULDNT_REACH
+        );
+        assert_eq!(completion_reason(&ModelError::Unreadable), UNREADABLE_REPLY);
+        assert_eq!(
+            completion_reason(&ModelError::Transport(notema_http::HttpError::TimedOut(
+                std::time::Duration::from_secs(1)
+            ))),
+            COULDNT_REACH
+        );
     }
 
     #[test]
@@ -479,7 +607,69 @@ mod tests {
 
         let toast = app.toasts.items().last().unwrap();
         assert_eq!(toast.variant, ToastVariant::Error);
-        assert_eq!(toast.message, format!("{prefix}: Autofill failed"));
+        assert_eq!(toast.message, format!("{prefix}: {AUTOFILL_FAILED}"));
+    }
+
+    #[test]
+    fn an_empty_reply_toasts_nothing_to_add() {
+        let mut app = app_with_entry();
+        let (id, prefix) = park_selected(&mut app);
+
+        assert!(app.apply_autofill_reply(AutofillResult {
+            id: id.clone(),
+            assistant: Some(Ok(
+                r#"{"feelings":[],"people":[],"activities":[],"mood":null}"#.to_string(),
+            )),
+        }));
+
+        let entry = app.resolved_selected_entry().unwrap();
+        assert!(entry.people.is_empty());
+        let toast = app.toasts.items().last().unwrap();
+        assert_eq!(toast.variant, ToastVariant::Info);
+        assert_eq!(toast.message, format!("{prefix}: {NOTHING_TO_ADD}"));
+    }
+
+    #[test]
+    fn a_declined_key_toasts_key_was_declined() {
+        let mut app = app_with_entry();
+        let (id, prefix) = park_selected(&mut app);
+
+        assert!(app.apply_autofill_reply(AutofillResult {
+            id: id.clone(),
+            assistant: Some(Err(ModelError::from_status_code(401))),
+        }));
+
+        let entry = app.resolved_selected_entry().unwrap();
+        assert!(entry.people.is_empty());
+        let toast = app.toasts.items().last().unwrap();
+        assert_eq!(toast.variant, ToastVariant::Error);
+        assert_eq!(toast.message, format!("{prefix}: Key was declined"));
+    }
+
+    #[test]
+    fn a_revision_conflict_toasts_entry_changed() {
+        let mut app = app_with_entry();
+        let (id, prefix) = park_selected(&mut app);
+        let path = app.resolved_selected_entry().unwrap().path.clone();
+        let original = fs::read_to_string(&path).unwrap();
+        fs::write(
+            &path,
+            original.replace("2026-07-01T10:00:00+02:00", "2026-07-01T10:00:01+02:00"),
+        )
+        .unwrap();
+
+        assert!(app.apply_autofill_reply(people_reply(&id)));
+
+        let journal = app.resolved_selected_entry().unwrap().journal.clone();
+        let (entry, _) = app
+            .services
+            .store
+            .read_entry_with_revision(&journal, &path)
+            .unwrap();
+        assert!(entry.people.is_empty(), "a revision conflict must not save");
+        let toast = app.toasts.items().last().unwrap();
+        assert_eq!(toast.variant, ToastVariant::Info);
+        assert_eq!(toast.message, format!("{prefix}: {ENTRY_CHANGED}"));
     }
 
     #[test]

@@ -2435,6 +2435,7 @@ dependencies = [
  "notema-domain",
  "notema-encryption",
  "notema-fuse",
+ "notema-http",
  "notema-import",
  "notema-model",
  "notema-storage",

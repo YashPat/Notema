@@ -224,6 +224,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+notema-http.workspace = true
 rand.workspace = true
 tempfile.workspace = true
 
