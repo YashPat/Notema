@@ -701,6 +701,11 @@ pub(super) fn apply_mouse_action(
             }
             // Settings rows click through `SettingsAction::Click`, not here.
             DialogListTarget::Settings => {}
+            DialogListTarget::ModelSetup => {
+                return Ok(Some(Action::Settings(SettingsAction::ModelSetupClick(
+                    index,
+                ))));
+            }
             DialogListTarget::Filter => {
                 if let Some(state) = app.filter_state_mut() {
                     state.select_index(index);
@@ -765,6 +770,11 @@ pub(super) fn apply_mouse_action(
                     state.scroll_by(delta, viewport);
                 }
             }
+            DialogListTarget::ModelSetup => {
+                if let Some(state) = app.model_setup_state_mut() {
+                    state.scroll_by(delta, viewport);
+                }
+            }
         },
         MouseAction::SetMood(score) => {
             if let Some(state) = app.edit_mood_state_mut() {
@@ -799,6 +809,17 @@ fn focus_text_field(app: &mut AppModel, target: TextFieldId) {
             }
         }
         TextFieldId::NewJournal => {}
+        TextFieldId::ModelBaseUrl
+        | TextFieldId::ModelName
+        | TextFieldId::ModelToken
+        | TextFieldId::ModelCloudKey => {
+            if let Some(index) = app
+                .model_setup_state()
+                .and_then(|state| state.row_for_field(target))
+            {
+                app.model_setup_select(index);
+            }
+        }
     }
 }
 
@@ -816,6 +837,12 @@ fn text_field_mut(
         TextFieldId::Feelings => app.edit_feeling_state_mut().map(|state| &mut state.input),
         TextFieldId::LocationQuery => app.edit_location_state_mut().map(|state| &mut state.query),
         TextFieldId::LocationName => app.edit_location_state_mut().map(|state| &mut state.name),
+        TextFieldId::ModelBaseUrl
+        | TextFieldId::ModelName
+        | TextFieldId::ModelToken
+        | TextFieldId::ModelCloudKey => app
+            .model_setup_state_mut()
+            .and_then(|state| state.input_for_mut(target)),
     }
 }
 
@@ -1168,6 +1195,9 @@ pub(super) fn hint_id_to_action(app: &AppModel, id: render::HintId) -> Option<Ac
         }
         render::HintId::DismissSuggestions if app.suggestions_visible() => {
             Some(Action::Search(SearchAction::DismissSuggestions))
+        }
+        render::HintId::ModelSetupBack if app.model_setup_state().is_some() => {
+            Some(Action::Settings(SettingsAction::ModelSetupCancel))
         }
         _ => None,
     }

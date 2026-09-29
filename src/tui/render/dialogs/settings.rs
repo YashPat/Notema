@@ -7,13 +7,15 @@ use super::*;
 
 use crate::config::Config;
 use crate::tui::entry_rows::{DividerAlign, section_divider, wrap_text};
-use crate::tui::features::settings::{SettingCategory, SettingRow};
+use crate::tui::features::settings::{
+    MODEL_DESCRIPTION_UNSET, SettingCategory, SettingRow, model_setting_description,
+};
 use crate::tui::state::{SettingsItem, SettingsState};
 
 const SETTINGS_DIALOG_WIDTH: u16 = 52;
 /// Enough for every category and its rows at once on a tall terminal; shorter
 /// ones clamp to the frame and scroll.
-const SETTINGS_MAX_VISIBLE_ROWS: u16 = 18;
+const SETTINGS_MAX_VISIBLE_ROWS: u16 = 20;
 /// A blank row between the list and the description block.
 const SETTINGS_DESC_SPACER: u16 = 1;
 /// A blank row between the description block and the hint bar.
@@ -41,16 +43,20 @@ fn settings_dialog_hint_height(theme: &Theme, frame_area: Rect) -> u16 {
 /// Rows reserved for the highlighted setting's wrapped description: the tallest
 /// description across every setting, so the block never resizes as the cursor
 /// moves (and short ones simply leave blank rows).
-fn settings_description_rows(theme: &Theme, frame_area: Rect) -> u16 {
+fn settings_description_rows(theme: &Theme, frame_area: Rect, config: &Config) -> u16 {
     let probe = centered_rect_fixed_size(SETTINGS_DIALOG_WIDTH, 1, frame_area);
     let width = dialog_content_full(theme, probe).width.max(1) as usize;
-    SettingCategory::ALL
+    let live = model_setting_description(config);
+    let mut tallest = SettingCategory::ALL
         .iter()
         .flat_map(|category| category.rows().iter())
         .map(|row| wrap_text(row.description(), width, SETTINGS_DESC_MAX_ROWS).len())
         .max()
-        .unwrap_or(1)
-        .clamp(1, SETTINGS_DESC_MAX_ROWS) as u16
+        .unwrap_or(1);
+    for sentence in [MODEL_DESCRIPTION_UNSET, live.as_str()] {
+        tallest = tallest.max(wrap_text(sentence, width, SETTINGS_DESC_MAX_ROWS).len());
+    }
+    tallest.clamp(1, SETTINGS_DESC_MAX_ROWS) as u16
 }
 
 fn settings_dialog_area(
@@ -83,10 +89,11 @@ pub(crate) fn settings_dialog_layout(
     theme: &Theme,
     frame_area: Rect,
     state: &SettingsState,
+    config: &Config,
 ) -> SettingsDialogLayout {
     let rows = state.items.len();
     let hint_height = settings_dialog_hint_height(theme, frame_area);
-    let desc_rows = settings_description_rows(theme, frame_area);
+    let desc_rows = settings_description_rows(theme, frame_area, config);
     let area = settings_dialog_area(theme, frame_area, rows, desc_rows, hint_height);
     let inner = dialog_content_full(theme, area);
     let list_height = inner
@@ -118,7 +125,7 @@ pub(in crate::tui::render) fn draw_settings_dialog(
     config: &Config,
     hover: HoverTarget,
 ) {
-    let layout = settings_dialog_layout(theme, frame.area(), state);
+    let layout = settings_dialog_layout(theme, frame.area(), state, config);
 
     let rows_len = state.items.len();
     let scroll = state.clamp_offset(layout.list.height);
@@ -149,7 +156,7 @@ pub(in crate::tui::render) fn draw_settings_dialog(
                 // Indent the row a step under its header; the Theme row trails
                 // the themable disclosure glyph, since it opens the picker.
                 let label = match row {
-                    SettingRow::Theme => {
+                    SettingRow::Theme | SettingRow::Model => {
                         format!("  {} {}", row.label(), theme.glyphs().collapsed)
                     }
                     _ => format!("  {}", row.label()),
@@ -173,10 +180,13 @@ pub(in crate::tui::render) fn draw_settings_dialog(
     // The highlighted setting's description, wrapped to the reserved block.
     let description = state
         .selected_row()
-        .map(|(_, row)| row.description())
+        .map(|(_, row)| match row {
+            SettingRow::Model => model_setting_description(config),
+            _ => row.description().to_string(),
+        })
         .unwrap_or_default();
     let desc_lines: Vec<Line<'_>> = wrap_text(
-        description,
+        &description,
         layout.description.width as usize,
         layout.description.height as usize,
     )

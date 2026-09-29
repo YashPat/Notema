@@ -36,6 +36,10 @@ fn execute_with_opener<B: Backend>(
             Effect::Geocode(request) => {
                 app.geocode.request(request, crate::tui::geocode::resolve);
             }
+            Effect::FetchOllamaTags(request) => {
+                app.ollama_tags
+                    .request(request, crate::tui::ollama_tags::resolve);
+            }
             Effect::Environment(request) => {
                 app.environment
                     .request(request, crate::tui::environment::resolve);

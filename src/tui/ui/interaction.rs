@@ -46,11 +46,16 @@ pub(crate) enum TextFieldId {
     Feelings,
     LocationQuery,
     LocationName,
+    ModelBaseUrl,
+    ModelName,
+    ModelToken,
+    ModelCloudKey,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum DialogId {
     Settings,
+    ModelSetup,
     MetadataMenu,
     EditorMetadataMenu,
     ThemePicker,

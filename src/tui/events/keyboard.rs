@@ -258,6 +258,7 @@ pub(super) fn key_to_action(
         Overlay::None => browse_key_to_action(app, key, reader_available),
         Overlay::MetadataMenu => metadata_menu_key_to_action(key),
         Overlay::Settings(_) => settings_key_to_action(key),
+        Overlay::ModelSetup(_) => model_setup_key_to_action(app, key),
         Overlay::Help { .. } => help_key_to_action(key),
         Overlay::ThemePicker(_) => theme_picker_key_to_action(key),
         Overlay::ConfirmDelete(_, selected) => confirm_delete_key_to_action(key, *selected),
@@ -299,6 +300,25 @@ fn metadata_menu_key_to_action(key: KeyEvent) -> Option<Action> {
 /// Keys while the settings dialog is open: arrows move the cursor (skipping the
 /// category sub-headers), Enter/Space activates the row (toggle or open the theme
 /// picker), ← / → adjust a number, and Esc closes the dialog.
+/// Keys while model setup is open. Up and down always move the highlight.
+/// Other keys reach a field only while that field is the highlight. Enter
+/// activates the row, including a field row.
+fn model_setup_key_to_action(app: &AppModel, key: KeyEvent) -> Option<Action> {
+    match key.code {
+        KeyCode::Esc => Some(Action::Settings(SettingsAction::ModelSetupCancel)),
+        KeyCode::Up => Some(Action::Settings(SettingsAction::ModelSetupMove(-1))),
+        KeyCode::Down => Some(Action::Settings(SettingsAction::ModelSetupMove(1))),
+        KeyCode::Enter => Some(Action::Settings(SettingsAction::ModelSetupActivate)),
+        _ if app
+            .model_setup_state()
+            .is_some_and(|state| state.highlighted_field_id().is_some()) =>
+        {
+            Some(Action::Overlay(OverlayAction::InputKey(key)))
+        }
+        _ => None,
+    }
+}
+
 fn settings_key_to_action(key: KeyEvent) -> Option<Action> {
     Some(match key.code {
         KeyCode::Esc => Action::Overlay(OverlayAction::Cancel),

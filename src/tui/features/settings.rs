@@ -18,13 +18,15 @@ pub(crate) enum SettingCategory {
     Appearance,
     Reader,
     Editor,
+    Model,
 }
 
 impl SettingCategory {
-    pub(crate) const ALL: [SettingCategory; 3] = [
+    pub(crate) const ALL: [SettingCategory; 4] = [
         SettingCategory::Appearance,
         SettingCategory::Reader,
         SettingCategory::Editor,
+        SettingCategory::Model,
     ];
 
     pub(crate) fn title(self) -> &'static str {
@@ -32,6 +34,7 @@ impl SettingCategory {
             SettingCategory::Appearance => "Appearance",
             SettingCategory::Reader => "Reader",
             SettingCategory::Editor => "Editor",
+            SettingCategory::Model => "Model",
         }
     }
 
@@ -40,6 +43,7 @@ impl SettingCategory {
             SettingCategory::Appearance => APPEARANCE_SETTINGS,
             SettingCategory::Reader => READER_SETTINGS,
             SettingCategory::Editor => EDITOR_SETTINGS,
+            SettingCategory::Model => MODEL_SETTINGS,
         }
     }
 }
@@ -59,6 +63,8 @@ pub(crate) enum AfterChange {
 pub(crate) enum SettingRow {
     /// Opens the theme picker; its value column shows the current theme name.
     Theme,
+    /// Opens model setup. The value column is the model name, never the token or URL.
+    Model,
     Bool {
         label: &'static str,
         description: &'static str,
@@ -100,6 +106,7 @@ impl SettingRow {
             // The Theme row opens the picker; the dialog trails it with the
             // themable disclosure glyph rather than an ellipsis.
             SettingRow::Theme => "Theme",
+            SettingRow::Model => "Model",
             SettingRow::Bool { label, .. } | SettingRow::Number { label, .. } => label,
         }
     }
@@ -107,6 +114,9 @@ impl SettingRow {
     pub(crate) fn description(&self) -> &'static str {
         match self {
             SettingRow::Theme => "Choose the color theme (also its color mode and chrome).",
+            // The dialog draws [`model_setting_description`]; this static sentence
+            // is the unset form the height probe already walks.
+            SettingRow::Model => MODEL_DESCRIPTION_UNSET,
             SettingRow::Bool { description, .. } | SettingRow::Number { description, .. } => {
                 description
             }
@@ -115,7 +125,7 @@ impl SettingRow {
 
     fn inherit(&self) -> Option<Inherit> {
         match self {
-            SettingRow::Theme => None,
+            SettingRow::Theme | SettingRow::Model => None,
             SettingRow::Bool { inherit, .. } | SettingRow::Number { inherit, .. } => *inherit,
         }
     }
@@ -132,6 +142,14 @@ impl SettingRow {
         }
         match self {
             SettingRow::Theme => config.ui.theme.clone(),
+            SettingRow::Model => {
+                let name = config.model.model.trim();
+                if name.is_empty() {
+                    "Not set".to_string()
+                } else {
+                    name.to_string()
+                }
+            }
             SettingRow::Bool { get, .. } => if get(config) { "On" } else { "Off" }.to_string(),
             SettingRow::Number { get, off_label, .. } => match off_label {
                 Some(label) if get(config) == 0 => label.to_string(),
@@ -193,6 +211,22 @@ const READER_SETTINGS: &[SettingRow] = &[
         inherit: None,
     },
 ];
+
+/// Shown under the Model row when no model name is stored. The set form names
+/// the model and is built by [`model_setting_description`].
+pub(crate) const MODEL_DESCRIPTION_UNSET: &str = "No model is set. Autofill uses it.";
+
+/// The Model row's description. Names the configured model, or the unset sentence.
+pub(crate) fn model_setting_description(config: &Config) -> String {
+    let name = config.model.model.trim();
+    if name.is_empty() {
+        MODEL_DESCRIPTION_UNSET.to_string()
+    } else {
+        format!("Autofill uses {name}.")
+    }
+}
+
+const MODEL_SETTINGS: &[SettingRow] = &[SettingRow::Model];
 
 const EDITOR_SETTINGS: &[SettingRow] = &[
     SettingRow::Bool {
@@ -284,6 +318,26 @@ impl AppModel {
         self.overlay = Overlay::Settings(Box::new(SettingsState::new()));
     }
 
+    /// Reopen settings on the Model row. Does not go through [`Self::open_settings`],
+    /// which always selects Theme, and does not arm the theme picker.
+    pub(crate) fn return_to_settings_model_row(&mut self) {
+        use crate::tui::state::SettingsItem;
+
+        let mut state = SettingsState::new();
+        if let Some(index) = state.items.iter().position(|item| {
+            matches!(
+                item,
+                SettingsItem::Row {
+                    category: SettingCategory::Model,
+                    ..
+                }
+            )
+        }) {
+            state.select_index(index);
+        }
+        self.overlay = Overlay::Settings(Box::new(state));
+    }
+
     pub(crate) fn settings_state(&self) -> Option<&SettingsState> {
         match &self.overlay {
             Overlay::Settings(state) => Some(state),
@@ -305,11 +359,15 @@ impl AppModel {
         }
     }
 
-    /// Activate the highlighted setting: toggle a bool, open the theme picker, or
-    /// (for a number, adjusted with ← / →) do nothing.
-    pub(crate) fn settings_activate(&mut self) {
+    /// Activate the highlighted setting: toggle a bool, open the theme picker or
+    /// model setup, or (for a number, adjusted with ← / →) do nothing.
+    ///
+    /// Opening the local Ollama list is the only arm that yields a fetch.
+    pub(crate) fn settings_activate(
+        &mut self,
+    ) -> Option<crate::tui::ollama_tags::OllamaTagsRequest> {
         let Some((_, row)) = self.settings_state().and_then(|s| s.selected_row()) else {
-            return;
+            return None;
         };
         match row {
             SettingRow::Theme => {
@@ -318,7 +376,9 @@ impl AppModel {
                 if let Overlay::ThemePicker(state) = &mut self.overlay {
                     state.reopen_settings = true;
                 }
+                None
             }
+            SettingRow::Model => self.open_model_setup(),
             // Cycles the ladder, so enter alone still reaches every state.
             SettingRow::Bool { inherit, .. } if inherit.is_some() => self.settings_adjust(1),
             SettingRow::Bool {
@@ -327,22 +387,26 @@ impl AppModel {
                 let next = !get(&self.services.config);
                 set(&mut self.services.config, next);
                 self.apply_setting_change(*after);
+                None
             }
-            SettingRow::Number { .. } => {}
+            SettingRow::Number { .. } => None,
         }
     }
 
     /// Step the highlighted setting one state in `dir` (-1/+1) along its ladder
     /// — `Inherit`, then the off state, then the numbers (or `Off`/`On`) — and
     /// persist. Every row answers to this, so ← / → alone drives the dialog.
-    pub(crate) fn settings_adjust(&mut self, dir: i16) {
+    pub(crate) fn settings_adjust(
+        &mut self,
+        dir: i16,
+    ) -> Option<crate::tui::ollama_tags::OllamaTagsRequest> {
         let Some((_, row)) = self.settings_state().and_then(|s| s.selected_row()) else {
-            return;
+            return None;
         };
         let inheriting = row.inheriting(&self.services.config);
         match row {
-            SettingRow::Theme if dir > 0 => self.settings_activate(),
-            SettingRow::Theme => {}
+            SettingRow::Theme | SettingRow::Model if dir > 0 => self.settings_activate(),
+            SettingRow::Theme | SettingRow::Model => None,
             // A two-state ladder wraps either way, so both arrows just flip it.
             SettingRow::Bool {
                 get,
@@ -354,6 +418,7 @@ impl AppModel {
                 let next = !get(&self.services.config);
                 set(&mut self.services.config, next);
                 self.apply_setting_change(*after);
+                None
             }
             // Ladder: Inherit, Off, On — wrapping, so enter cycles too.
             SettingRow::Bool {
@@ -376,6 +441,7 @@ impl AppModel {
                     _ => set(&mut self.services.config, true),
                 }
                 self.apply_setting_change(*after);
+                None
             }
             SettingRow::Number {
                 get,
@@ -394,7 +460,7 @@ impl AppModel {
                         set(&mut self.services.config, bottom);
                         self.apply_setting_change(AfterChange::None);
                     }
-                    return;
+                    return None;
                 }
                 let current = get(&self.services.config);
                 if current == bottom && dir < 0 {
@@ -402,7 +468,7 @@ impl AppModel {
                         (inherit.set)(&mut self.services.config);
                         self.apply_setting_change(AfterChange::None);
                     }
-                    return;
+                    return None;
                 }
                 let next = match off_label {
                     // When the off state (0) sits below `min`: from off up lands
@@ -421,13 +487,15 @@ impl AppModel {
                     set(&mut self.services.config, next);
                     self.apply_setting_change(AfterChange::None);
                 }
+                None
             }
         }
     }
 
     /// Persist the config after a setting change, running any follow-up work; a
     /// failed save toasts and leaves the (already in-memory) change in place.
-    fn apply_setting_change(&mut self, after: AfterChange) {
+    /// Returns whether the file was written.
+    pub(crate) fn apply_setting_change(&mut self, after: AfterChange) -> bool {
         if let Err(err) =
             crate::config::save_config(&self.services.config_path, &self.services.config)
         {
@@ -435,11 +503,12 @@ impl AppModel {
                 ToastVariant::Error,
                 format!("Couldn't save config: {}", crate::tui::concise_error(&err)),
             );
-            return;
+            return false;
         }
         if after == AfterChange::ReresolveTheme {
             self.apply_effective_theme();
         }
+        true
     }
 
     /// Open the theme picker: list the theme files on disk (parse results

@@ -26,6 +26,11 @@ impl AppModel {
                 }
             }
             Overlay::EditLocation(state) => state.input_key(key),
+            Overlay::ModelSetup(state) => {
+                if let Some(input) = state.highlighted_input_mut() {
+                    input.input(key);
+                }
+            }
             _ => self.search_input_key(key),
         }
     }
@@ -49,6 +54,11 @@ impl AppModel {
                 }
             }
             Overlay::EditLocation(state) => state.input_paste(text),
+            Overlay::ModelSetup(state) => {
+                if let Some(input) = state.highlighted_input_mut() {
+                    input.paste_str(text);
+                }
+            }
             _ => self.search_input_paste(text),
         }
     }
@@ -64,7 +74,8 @@ impl AppModel {
             Overlay::NewJournal(_)
             | Overlay::EditMetadata(_)
             | Overlay::EditFeelings(_)
-            | Overlay::EditLocation(_) => {}
+            | Overlay::EditLocation(_)
+            | Overlay::ModelSetup(_) => {}
             _ => self.refresh_search_suggestions(),
         }
     }
@@ -86,6 +97,7 @@ impl AppModel {
                 EditLocationFocus::Name => Some(&mut state.name),
                 EditLocationFocus::List => None,
             },
+            Overlay::ModelSetup(state) => state.highlighted_input_mut(),
             Overlay::None if self.nav.mode == Mode::Search && self.nav.focus == Focus::Entries => {
                 Some(&mut self.search.query)
             }

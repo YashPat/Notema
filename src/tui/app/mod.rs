@@ -368,6 +368,8 @@ pub(crate) struct AppModel {
     pub(crate) image: ImageState,
     /// Background geocoding for the location dialog; spawned on first lookup.
     pub(crate) geocode: crate::tui::geocode::GeocodeWorker,
+    /// Background fetch of the local Ollama model list; spawned on first use.
+    pub(crate) ollama_tags: crate::tui::ollama_tags::OllamaTagsWorker,
     /// Whole-library reloads; spawned on the first one that can't be satisfied
     /// incrementally. See [`Self::request_library_reload`].
     pub(crate) library_reload: crate::tui::runtime::reload::LibraryReloadWorker,
@@ -387,6 +389,9 @@ pub(crate) struct AppModel {
     /// Id counter for geocode requests, app-level for the same reason: a dialog
     /// reopened while an earlier lookup is still in flight must not reuse its id.
     pub(crate) next_geocode_id: u64,
+    /// Id counter for Ollama tag-list requests. A dialog reopened while an
+    /// earlier fetch is in flight must not reuse its id.
+    pub(crate) next_ollama_tags_id: u64,
     pub(crate) reader_anchor_flash: Option<ReaderAnchorFlash>,
     /// Link-hint mode over the reader's openable targets. Named for the reader
     /// because `hints` alone already means the footer hint bar.
@@ -607,10 +612,12 @@ impl AppModel {
             library_reload: crate::tui::runtime::reload::LibraryReloadWorker::default(),
             queued_reload: None,
             geocode: crate::tui::geocode::GeocodeWorker::default(),
+            ollama_tags: crate::tui::ollama_tags::OllamaTagsWorker::default(),
             environment: crate::tui::environment::EnvironmentWorker::default(),
             autofill: crate::tui::autofill::Autofill::default(),
             next_environment_id: 0,
             next_geocode_id: 0,
+            next_ollama_tags_id: 0,
             reader_anchor_flash: None,
             reader_hints: ReaderHintState::default(),
             scrollbar: ScrollbarDragState::default(),

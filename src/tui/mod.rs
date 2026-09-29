@@ -14,6 +14,7 @@ mod features;
 mod geocode;
 mod hit_test;
 mod image;
+mod ollama_tags;
 mod paste;
 mod render;
 mod runtime;

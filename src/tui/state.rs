@@ -790,6 +790,8 @@ pub(crate) enum Overlay {
     /// sub-headers and their settings toggled/adjusted in place. Boxed to keep
     /// `Overlay` small, matching the other list-state variants.
     Settings(Box<SettingsState>),
+    /// Model setup. Boxed because the screens hold text inputs.
+    ModelSetup(Box<crate::tui::features::model_setup::ModelSetupState>),
     /// The global help overlay: a two-tab reference (keyboard shortcuts and
     /// search commands) scrolled to `scroll`. Opened with `?` from browse or a
     /// search result. A modal dialog like the rest: Tab/arrows switch tabs and

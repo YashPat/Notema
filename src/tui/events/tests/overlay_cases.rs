@@ -1371,3 +1371,455 @@ fn wheel_over_confirm_dialog_is_a_no_op() {
         None
     );
 }
+
+// ── Model setup ───────────────────────────────────────────────────────────────
+
+fn dispatch(app: &mut crate::tui::app::AppModel, action: Action) -> DispatchOutcome {
+    let backend = ratatui::backend::TestBackend::new(100, 40);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    dispatch_action(&mut terminal, app, action).unwrap()
+}
+
+fn select_model_row(app: &mut crate::tui::app::AppModel) {
+    use crate::tui::features::settings::SettingCategory;
+    use crate::tui::state::SettingsItem;
+
+    let index = app
+        .settings_state()
+        .unwrap()
+        .items
+        .iter()
+        .position(|item| {
+            matches!(
+                item,
+                SettingsItem::Row {
+                    category: SettingCategory::Model,
+                    ..
+                }
+            )
+        })
+        .expect("Model row");
+    app.settings_select(index);
+}
+
+fn open_model_dialog(app: &mut crate::tui::app::AppModel) -> DispatchOutcome {
+    app.open_settings();
+    select_model_row(app);
+    dispatch(app, Action::Settings(SettingsAction::Activate))
+}
+
+fn saved_model(app: &crate::tui::app::AppModel) -> crate::config::ModelSection {
+    crate::config::load_config(&app.services.config_path)
+        .unwrap()
+        .model
+}
+
+#[test]
+fn settings_model_row_shows_the_name_or_not_set() {
+    let mut app = app_with_journals(&["work"]);
+    app.open_settings();
+    select_model_row(&mut app);
+    assert_eq!(selected_value(&app), "Not set");
+
+    app.services.config.model.model = "  gpt-4.1-mini  ".to_string();
+    app.services.config.model.base_url = "https://secret.example/v1".to_string();
+    app.services.config.model.token = Some("sk-secret".to_string());
+    assert_eq!(selected_value(&app), "gpt-4.1-mini");
+}
+
+#[test]
+fn model_row_enter_opens_setup_and_esc_returns_without_writing() {
+    let mut app = app_with_journals(&["work"]);
+    let outcome = open_model_dialog(&mut app);
+    assert!(outcome.effects.is_empty());
+    assert!(matches!(
+        app.model_setup_state().and_then(|state| state.current()),
+        Some(crate::tui::features::model_setup::ModelScreen::Choice)
+    ));
+
+    dispatch(&mut app, Action::Settings(SettingsAction::ModelSetupCancel));
+    assert!(matches!(app.overlay, Overlay::Settings(_)));
+    assert!(matches!(
+        app.settings_state().and_then(|state| state.selected_row()),
+        Some((crate::tui::features::settings::SettingCategory::Model, _))
+    ));
+    assert!(app.services.config.model.is_unset());
+    assert!(!app.services.config_path.exists());
+}
+
+#[test]
+fn model_setup_row_click_maps_through_the_regions() {
+    use crate::tui::features::model_setup::ModelScreen;
+    use crate::tui::ui::{DialogId, InteractionKind};
+
+    let mut app = app_with_journals(&["work"]);
+    open_model_dialog(&mut app);
+    let area = Rect::new(0, 0, 80, 24);
+
+    // Cloud is not the landing highlight. The first click selects it.
+    let row_action = menu_click_action(&mut app, area, |kind| {
+        matches!(
+            kind,
+            InteractionKind::DialogRow {
+                dialog: DialogId::ModelSetup,
+                index: 1,
+            }
+        )
+    });
+    assert_eq!(
+        row_action,
+        Some(Action::Settings(SettingsAction::ModelSetupClick(1)))
+    );
+
+    let (_, view) = render_view(&mut app, area.width, area.height);
+    let (col, row) = find_interaction(&view, area.width, area.height, |kind| {
+        matches!(
+            kind,
+            InteractionKind::DialogRow {
+                dialog: DialogId::ModelSetup,
+                index: 1,
+            }
+        )
+    })
+    .unwrap();
+    mouse_in_area(&mut app, mouse(down(), col, row), area.width, area.height);
+    assert_eq!(
+        app.model_setup_state()
+            .and_then(|state| state.selected_index()),
+        Some(1)
+    );
+    assert!(matches!(
+        app.model_setup_state().and_then(|state| state.current()),
+        Some(ModelScreen::Choice)
+    ));
+
+    mouse_in_area(&mut app, mouse(down(), col, row), area.width, area.height);
+    assert!(matches!(
+        app.model_setup_state().and_then(|state| state.current()),
+        Some(ModelScreen::Providers)
+    ));
+}
+
+#[test]
+fn model_setup_keys_move_activate_and_type_into_the_highlighted_field() {
+    let mut app = app_with_journals(&["work"]);
+    open_model_dialog(&mut app);
+
+    assert_eq!(
+        keyboard::key_to_action(&app, key(KeyCode::Up), true),
+        Some(Action::Settings(SettingsAction::ModelSetupMove(-1)))
+    );
+    assert_eq!(
+        keyboard::key_to_action(&app, key(KeyCode::Down), true),
+        Some(Action::Settings(SettingsAction::ModelSetupMove(1)))
+    );
+    assert_eq!(
+        keyboard::key_to_action(&app, key(KeyCode::Enter), true),
+        Some(Action::Settings(SettingsAction::ModelSetupActivate))
+    );
+    assert_eq!(
+        keyboard::key_to_action(&app, key(KeyCode::Esc), true),
+        Some(Action::Settings(SettingsAction::ModelSetupCancel))
+    );
+    // Choice has no field under the highlight, so a letter is not typed.
+    assert_eq!(
+        keyboard::key_to_action(&app, key(KeyCode::Char('h')), true),
+        None
+    );
+
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupMove(1)),
+    );
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupMove(1)),
+    );
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupActivate),
+    );
+    let typed = key(KeyCode::Char('h'));
+    assert_eq!(
+        keyboard::key_to_action(&app, typed, true),
+        Some(Action::Overlay(OverlayAction::InputKey(typed)))
+    );
+    dispatch(&mut app, Action::Overlay(OverlayAction::InputKey(typed)));
+    let url = app
+        .model_setup_state()
+        .and_then(|state| state.current())
+        .and_then(|screen| match screen {
+            crate::tui::features::model_setup::ModelScreen::Fields { base_url, .. } => {
+                Some(base_url.as_str().to_string())
+            }
+            _ => None,
+        });
+    assert_eq!(url.as_deref(), Some("h"));
+
+    // Different setup… is not a field.
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupMove(1)),
+    );
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupMove(1)),
+    );
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupMove(1)),
+    );
+    assert_eq!(
+        keyboard::key_to_action(&app, key(KeyCode::Char('x')), true),
+        None
+    );
+}
+
+#[test]
+fn model_setup_saves_local_cloud_and_other_server() {
+    use crate::tui::features::model_setup::ModelScreen;
+    use notema_model::OLLAMA_BASE_URL;
+
+    let mut app = app_with_journals(&["work"]);
+    open_model_dialog(&mut app);
+    {
+        let state = app.model_setup_state_mut().unwrap();
+        state.stack = vec![ModelScreen::Local {
+            names: vec!["llama3.2".to_string()],
+            saved: None,
+        }];
+        state.select_index(0);
+    }
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupActivate),
+    );
+    assert!(matches!(app.overlay, Overlay::Settings(_)));
+    let saved = saved_model(&app);
+    assert_eq!(saved.base_url, OLLAMA_BASE_URL);
+    assert_eq!(saved.model, "llama3.2");
+    assert_eq!(saved.token, None);
+    let text = std::fs::read_to_string(&app.services.config_path).unwrap();
+    assert!(!text.contains("token"));
+
+    // Listed cloud model, with a key. A saved local model reopens on Local,
+    // so clear it and start this path from Choice.
+    app.services.config.model = crate::config::ModelSection::default();
+    open_model_dialog(&mut app);
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupMove(1)),
+    );
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupActivate),
+    );
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupActivate),
+    );
+    {
+        let state = app.model_setup_state_mut().unwrap();
+        let ModelScreen::Cloud { key, .. } = state.stack.last_mut().unwrap() else {
+            panic!("cloud screen");
+        };
+        key.set_text("sk-test");
+    }
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupMove(1)),
+    );
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupActivate),
+    );
+    let saved = saved_model(&app);
+    assert_eq!(saved.base_url, "https://api.openai.com/v1");
+    assert_eq!(saved.model, "gpt-4.1-mini");
+    assert_eq!(saved.token.as_deref(), Some("sk-test"));
+
+    // Other server: a blank token is absent from the file. An incomplete form writes nothing.
+    // Reopening the cloud model lands on that provider, so return to Choice first.
+    open_model_dialog(&mut app);
+    {
+        let state = app.model_setup_state_mut().unwrap();
+        state.stack = vec![ModelScreen::Choice];
+        state.select_index(0);
+    }
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupMove(1)),
+    );
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupMove(1)),
+    );
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupActivate),
+    );
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupActivate),
+    );
+    assert!(matches!(app.overlay, Overlay::ModelSetup(_)));
+    assert_eq!(app.services.config.model.model, "gpt-4.1-mini");
+    {
+        let state = app.model_setup_state_mut().unwrap();
+        let ModelScreen::Fields {
+            base_url,
+            model,
+            token,
+            ..
+        } = state.stack.last_mut().unwrap()
+        else {
+            panic!("fields");
+        };
+        base_url.set_text(" https://example.com/v1 ");
+        model.set_text(" my-model ");
+        token.set_text("   ");
+    }
+    dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupActivate),
+    );
+    let saved = saved_model(&app);
+    assert_eq!(saved.base_url, "https://example.com/v1");
+    assert_eq!(saved.model, "my-model");
+    assert_eq!(saved.token, None);
+    let text = std::fs::read_to_string(&app.services.config_path).unwrap();
+    assert!(!text.contains("token"));
+    assert!(matches!(
+        app.settings_state().and_then(|state| state.selected_row()),
+        Some((crate::tui::features::settings::SettingCategory::Model, _))
+    ));
+}
+
+#[test]
+fn reopening_a_model_lands_on_its_screen() {
+    use crate::tui::features::model_setup::ModelScreen;
+
+    let mut app = app_with_journals(&["work"]);
+    app.services.config.model.base_url = "http://127.0.0.1:11434/v1/".to_string();
+    app.services.config.model.model = "llama3.2".to_string();
+    let outcome = open_model_dialog(&mut app);
+    assert!(matches!(
+        outcome.effects.first(),
+        Some(Effect::FetchOllamaTags(_))
+    ));
+    assert!(matches!(
+        app.model_setup_state().and_then(|state| state.current()),
+        Some(ModelScreen::Local {
+            saved: Some(name),
+            ..
+        }) if name == "llama3.2"
+    ));
+    dispatch(&mut app, Action::Settings(SettingsAction::ModelSetupCancel));
+
+    app.services.config.model.base_url = "https://api.groq.com/openai/v1".to_string();
+    app.services.config.model.model = "llama-3.1-8b-instant".to_string();
+    app.services.config.model.token = Some("gsk".to_string());
+    let outcome = open_model_dialog(&mut app);
+    assert!(outcome.effects.is_empty());
+    let state = app.model_setup_state().unwrap();
+    assert_eq!(state.stack.len(), 1);
+    assert_eq!(state.title(), "Groq");
+    assert!(matches!(state.current(), Some(ModelScreen::Cloud { .. })));
+    assert_eq!(state.selected_index(), Some(2));
+    dispatch(&mut app, Action::Settings(SettingsAction::ModelSetupCancel));
+
+    app.services.config.model.base_url = "https://example.com/v1".to_string();
+    app.services.config.model.model = "my-model".to_string();
+    app.services.config.model.token = None;
+    open_model_dialog(&mut app);
+    match app.model_setup_state().and_then(|state| state.current()) {
+        Some(ModelScreen::Fields {
+            base_url, model, ..
+        }) => {
+            assert_eq!(base_url.as_str(), "https://example.com/v1");
+            assert_eq!(model.as_str(), "my-model");
+        }
+        _ => panic!("expected the typed fields"),
+    }
+}
+
+#[test]
+fn ollama_empty_list_replaces_local_or_keeps_the_saved_name() {
+    use crate::tui::features::model_setup::ModelScreen;
+    use notema_model::OLLAMA_BASE_URL;
+
+    let mut app = app_with_journals(&["work"]);
+    app.services.config.model.base_url = OLLAMA_BASE_URL.to_string();
+    let outcome = open_model_dialog(&mut app);
+    let Effect::FetchOllamaTags(request) = outcome.effects.first().unwrap() else {
+        panic!("expected a tag fetch");
+    };
+    assert!(!app.accept_ollama_tags(request.id.wrapping_add(1), Ok(vec!["nope".into()])));
+    assert!(app.model_setup_state().unwrap().on_local());
+
+    assert!(app.accept_ollama_tags(request.id, Err("down".into())));
+    match app.model_setup_state().and_then(|state| state.current()) {
+        Some(ModelScreen::Fields {
+            base_url,
+            note: Some("Ollama returned nothing."),
+            ..
+        }) => assert_eq!(base_url.as_str(), OLLAMA_BASE_URL),
+        _ => panic!("expected the typed fallback"),
+    }
+    assert_eq!(app.model_setup_state().unwrap().stack.len(), 1);
+    dispatch(&mut app, Action::Settings(SettingsAction::ModelSetupCancel));
+    assert!(app.services.config.model.model.trim().is_empty());
+    assert!(!app.services.config_path.exists());
+
+    // A saved name stays on Local when the fetch fails, and is highlighted.
+    app.services.config.model.base_url = OLLAMA_BASE_URL.to_string();
+    app.services.config.model.model = "llama3.2".to_string();
+    let outcome = open_model_dialog(&mut app);
+    let Effect::FetchOllamaTags(request) = outcome.effects.first().unwrap() else {
+        panic!("expected a tag fetch");
+    };
+    assert!(app.accept_ollama_tags(request.id, Err("down".into())));
+    match app.model_setup_state().and_then(|state| state.current()) {
+        Some(ModelScreen::Local { names, .. }) => assert_eq!(names, &["llama3.2".to_string()]),
+        _ => panic!("expected the saved name"),
+    }
+    assert_eq!(app.model_setup_state().unwrap().selected_index(), Some(0));
+    dispatch(&mut app, Action::Settings(SettingsAction::ModelSetupCancel));
+
+    // Choice pushed Local: a failure replaces that screen, so Esc returns to Choice.
+    app.services.config.model = crate::config::ModelSection::default();
+    open_model_dialog(&mut app);
+    let outcome = dispatch(
+        &mut app,
+        Action::Settings(SettingsAction::ModelSetupActivate),
+    );
+    let Effect::FetchOllamaTags(request) = outcome.effects.first().unwrap() else {
+        panic!("expected a tag fetch");
+    };
+    assert!(app.accept_ollama_tags(request.id, Ok(Vec::new())));
+    assert!(matches!(
+        app.model_setup_state().unwrap().stack.as_slice(),
+        [ModelScreen::Choice, ModelScreen::Fields { .. }]
+    ));
+    dispatch(&mut app, Action::Settings(SettingsAction::ModelSetupCancel));
+    assert!(matches!(
+        app.model_setup_state().and_then(|state| state.current()),
+        Some(ModelScreen::Choice)
+    ));
+
+    // A successful fetch highlights the saved name and merges it when missing.
+    app.services.config.model.base_url = OLLAMA_BASE_URL.to_string();
+    app.services.config.model.model = "kept".to_string();
+    let outcome = open_model_dialog(&mut app);
+    let Effect::FetchOllamaTags(request) = outcome.effects.first().unwrap() else {
+        panic!("expected a tag fetch");
+    };
+    assert!(app.accept_ollama_tags(request.id, Ok(vec!["other".into(), "kept".into()])));
+    match app.model_setup_state().and_then(|state| state.current()) {
+        Some(ModelScreen::Local { names, .. }) => {
+            assert_eq!(names, &["other".to_string(), "kept".to_string()])
+        }
+        _ => panic!("expected both names"),
+    }
+    assert_eq!(app.model_setup_state().unwrap().selected_index(), Some(1));
+}

@@ -12,6 +12,7 @@ pub(crate) mod images;
 pub(crate) mod insights;
 pub(crate) mod location;
 pub(crate) mod metadata;
+pub(crate) mod model_setup;
 pub(crate) mod overlays;
 pub(crate) mod reader;
 pub(crate) mod search;

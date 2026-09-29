@@ -521,6 +521,12 @@ fn run_loop(
             events::Action::Background(events::BackgroundAction::PollGeocode),
         )?;
         let geocode_ready = effects::execute(terminal, &mut app, geocode_outcome)?.redraw;
+        let ollama_tags_outcome = events::dispatch_action(
+            terminal,
+            &mut app,
+            events::Action::Background(events::BackgroundAction::PollOllamaTags),
+        )?;
+        let ollama_tags_ready = effects::execute(terminal, &mut app, ollama_tags_outcome)?.redraw;
         // Route any finished weather/air fetches: attach to the editor draft or
         // write back to the entry file. Then pace out the next backfill job.
         let context_outcome = events::dispatch_action(
@@ -767,6 +773,7 @@ fn run_loop(
             || search_recomputed
             || images_ready
             || geocode_ready
+            || ollama_tags_ready
             || context_ready
             || autofill_ready
             || timers_changed

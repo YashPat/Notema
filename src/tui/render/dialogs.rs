@@ -43,6 +43,9 @@ pub(crate) use filter::{filter_dialog_hints, filter_dialog_layout};
 mod settings;
 pub(super) use settings::draw_settings_dialog;
 pub(crate) use settings::{settings_dialog_hints, settings_dialog_layout};
+mod model_setup;
+pub(super) use model_setup::draw_model_setup;
+pub(crate) use model_setup::{model_setup_fields, model_setup_hints, model_setup_layout};
 mod overlays;
 pub(crate) use overlays::{confirm_delete_inner, new_journal_field_rect};
 pub(super) use overlays::{

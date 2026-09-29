@@ -25,6 +25,9 @@ pub(super) fn poll_timeout(
     if app.geocode.has_pending() {
         timeout = timeout.min(Duration::from_millis(50));
     }
+    if app.ollama_tags.has_pending() {
+        timeout = timeout.min(Duration::from_millis(50));
+    }
     if app.environment.has_pending() {
         timeout = timeout.min(Duration::from_millis(100));
     }

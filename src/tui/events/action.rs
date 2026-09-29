@@ -15,6 +15,7 @@ pub(crate) enum DialogListTarget {
     Feelings,
     Location,
     ThemePicker,
+    ModelSetup,
     Filter,
     Settings,
     SearchSuggestions,
@@ -120,6 +121,7 @@ pub(crate) enum BackgroundAction {
     ExternalOpenFailed(String),
     PollImages,
     PollGeocode,
+    PollOllamaTags,
     PollEnvironment,
     PollAutofill,
     PollLibraryReload,
@@ -249,6 +251,12 @@ pub(crate) enum SettingsAction {
     ThemePickerCycleChrome,
     ThemePickerCycleMode,
     ThemePickerToggleScope,
+    ModelSetupMove(i16),
+    ModelSetupActivate,
+    /// Esc. Pops one screen, or returns to the Model settings row from the landing screen.
+    ModelSetupCancel,
+    /// Click row `index`: select it, or activate it if already selected.
+    ModelSetupClick(usize),
 }
 
 #[derive(Debug, PartialEq)]

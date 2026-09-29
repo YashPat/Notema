@@ -141,6 +141,12 @@ fn mapped_overlay_click(app: &AppModel, col: u16, row: u16, view: &ViewState) ->
         InteractionKind::FilterTab(tab) => Some(Action::Filter(FilterAction::SelectTab(*tab))),
         InteractionKind::HelpTab(tab) => Some(Action::Overlay(OverlayAction::HelpSelectTab(*tab))),
         InteractionKind::DialogRow { dialog, index } => dialog_row_action(*dialog, *index),
+        // A model field's text sits on its row. The pointer edits it only while
+        // that row is highlighted; otherwise the click selects the row.
+        InteractionKind::TextField(id) if is_model_field(*id) => app
+            .model_setup_state()
+            .and_then(|state| state.row_for_field(*id))
+            .and_then(|index| dialog_row_action(DialogId::ModelSetup, index)),
         InteractionKind::DialogList { dialog, .. } => dialog_list_focus_action(*dialog),
         InteractionKind::DialogInput(input) => dialog_input_focus_action(*input),
         InteractionKind::ConfirmButton {
@@ -182,6 +188,7 @@ fn dialog_row_action(dialog: DialogId, index: usize) -> Option<Action> {
             _ => None,
         },
         DialogId::ThemePicker => Some(Action::Settings(SettingsAction::ThemePickerClick(index))),
+        DialogId::ModelSetup => Some(Action::Settings(SettingsAction::ModelSetupClick(index))),
         // The help tables have no rows to click, and the suggestion list is not
         // an overlay — `mouse_to_action` probes it directly.
         DialogId::Help | DialogId::EditorHelp | DialogId::SearchSuggestions => None,
@@ -263,6 +270,7 @@ pub(super) fn mapped_overlay_wheel(
         DialogId::ThemePicker => DialogListTarget::ThemePicker,
         DialogId::Filter => DialogListTarget::Filter,
         DialogId::Settings => DialogListTarget::Settings,
+        DialogId::ModelSetup => DialogListTarget::ModelSetup,
         // The menus and the help tables scroll by other routes, or not at all.
         _ => return None,
     };
@@ -286,6 +294,9 @@ pub(super) fn text_field_mouse_action(
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             let (target, column) = text_field_at(mouse.column, mouse.row, view)?;
+            if !model_field_accepts_pointer(app, target) {
+                return None;
+            }
             Some(if double_click {
                 MouseAction::TextFieldSelectWord { target, column }
             } else {
@@ -319,6 +330,26 @@ fn text_field_at(col: u16, row: u16, view: &ViewState) -> Option<(TextFieldId, u
     Some((*id, col - area.x))
 }
 
+fn is_model_field(id: TextFieldId) -> bool {
+    matches!(
+        id,
+        TextFieldId::ModelBaseUrl
+            | TextFieldId::ModelName
+            | TextFieldId::ModelToken
+            | TextFieldId::ModelCloudKey
+    )
+}
+
+/// Model fields share their row with the list. Keys and the pointer reach the
+/// text only while that row is the highlight; a click elsewhere on the row
+/// selects it.
+fn model_field_accepts_pointer(app: &AppModel, id: TextFieldId) -> bool {
+    !is_model_field(id)
+        || app
+            .model_setup_state()
+            .is_some_and(|state| state.highlighted_field_id() == Some(id))
+}
+
 fn active_text_field_target(app: &AppModel) -> Option<TextFieldId> {
     match &app.overlay {
         Overlay::NewJournal(_) => Some(TextFieldId::NewJournal),
@@ -329,6 +360,7 @@ fn active_text_field_target(app: &AppModel) -> Option<TextFieldId> {
             EditLocationFocus::Name => Some(TextFieldId::LocationName),
             EditLocationFocus::List => None,
         },
+        Overlay::ModelSetup(state) => state.highlighted_field_id(),
         Overlay::None if app.nav.mode == Mode::Search => Some(TextFieldId::Search),
         _ => None,
     }

@@ -69,11 +69,12 @@ pub(crate) use dialogs::{
 use dialogs::{
     draw_confirm_delete, draw_edit_feelings_dialog, draw_edit_location_dialog,
     draw_edit_metadata_dialog, draw_edit_mood_dialog, draw_fetching_environment,
-    draw_filter_dialog, draw_new_journal_input, draw_settings_dialog, draw_theme_picker,
+    draw_filter_dialog, draw_model_setup, draw_new_journal_input, draw_settings_dialog,
+    draw_theme_picker,
 };
 pub(crate) use dialogs::{
     feelings_dialog_layout, filter_dialog_layout, location_dialog_layout, metadata_dialog_layout,
-    settings_dialog_layout, theme_picker_layout,
+    model_setup_layout, settings_dialog_layout, theme_picker_layout,
 };
 use editor::draw_entry_editor;
 use entries::draw_entry_list;
@@ -438,7 +439,12 @@ fn register_overlay_interactions(
 
     match &app.overlay {
         Overlay::Settings(state) => {
-            let layout = dialogs::settings_dialog_layout(context.theme, frame_area, state);
+            let layout = dialogs::settings_dialog_layout(
+                context.theme,
+                frame_area,
+                state,
+                &app.services.config,
+            );
             // The whole list catches the wheel; only setting rows register a
             // clickable row, so a click on a sub-header is inert.
             context.view.interactions.push(
@@ -657,6 +663,24 @@ fn register_overlay_interactions(
                 *scroll as usize,
             );
             register_hint_regions(context, layout.hints, menus::help_dialog_hints());
+        }
+        Overlay::ModelSetup(state) => {
+            let layout = dialogs::model_setup_layout(context.theme, frame_area, state);
+            register_dialog_list(
+                context,
+                layout.list,
+                layout.list,
+                state.offset(),
+                state.item_count(),
+                DialogId::ModelSetup,
+            );
+            register_hint_regions(context, layout.hints, dialogs::model_setup_hints(state));
+            for field in dialogs::model_setup_fields(&layout, state) {
+                context
+                    .view
+                    .interactions
+                    .push(field.rect, InteractionKind::TextField(field.id));
+            }
         }
         _ => {}
     }
@@ -930,6 +954,10 @@ fn draw_overlays(theme: &crate::tui::theme::Theme, frame: &mut Frame<'_>, app: &
 
     if let crate::tui::state::Overlay::Settings(state) = &mut app.overlay {
         draw_settings_dialog(theme, frame, state, &app.services.config, hover);
+    }
+
+    if let crate::tui::state::Overlay::ModelSetup(state) = &mut app.overlay {
+        draw_model_setup(theme, frame, state, hover);
     }
 
     if let crate::tui::state::Overlay::Help { tab, scroll } = &mut app.overlay {

@@ -56,6 +56,75 @@ pub struct CompletionRequest {
     pub body: Value,
 }
 
+/// A hosted chat endpoint and the model ids offered on its setup screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Provider {
+    pub name: &'static str,
+    pub base_url: &'static str,
+    pub models: &'static [&'static str],
+}
+
+/// OpenAI-compatible base URL of a local Ollama server.
+pub const OLLAMA_BASE_URL: &str = "http://127.0.0.1:11434/v1";
+
+/// Ollama's native tag list. This is not the OpenAI-compatible base URL.
+pub const OLLAMA_TAGS_URL: &str = "http://127.0.0.1:11434/api/tags";
+
+/// Cap on an Ollama tag-list body.
+const MAX_TAGS_BYTES: u64 = 64 * 1024;
+
+/// Cloud providers shown in model setup, in menu order.
+pub const PROVIDERS: &[Provider] = &[
+    Provider {
+        name: "OpenAI",
+        base_url: "https://api.openai.com/v1",
+        models: &["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"],
+    },
+    Provider {
+        name: "Groq",
+        base_url: "https://api.groq.com/openai/v1",
+        models: &["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+    },
+    Provider {
+        name: "OpenRouter",
+        base_url: "https://openrouter.ai/api/v1",
+        models: &[
+            "openai/gpt-4.1-mini",
+            "google/gemini-2.5-flash",
+            "anthropic/claude-sonnet-4",
+        ],
+    },
+];
+
+/// Read `models[].name` from an Ollama `/api/tags` body.
+///
+/// An empty name is skipped. A missing `models` array, a non-array, or an
+/// entry with no string name is [`ModelError::Unreadable`].
+pub fn parse_ollama_tags(body: &str) -> Result<Vec<String>, ModelError> {
+    let value: Value = serde_json::from_str(body).map_err(|_| ModelError::Unreadable)?;
+    let models = value
+        .get("models")
+        .and_then(Value::as_array)
+        .ok_or(ModelError::Unreadable)?;
+    let mut names = Vec::new();
+    for entry in models {
+        let Some(name) = entry.get("name").and_then(Value::as_str) else {
+            return Err(ModelError::Unreadable);
+        };
+        if name.is_empty() {
+            continue;
+        }
+        names.push(name.to_string());
+    }
+    Ok(names)
+}
+
+/// GET [`OLLAMA_TAGS_URL`] and parse the names.
+pub fn fetch_ollama_tags() -> Result<Vec<String>, ModelError> {
+    let body = notema_http::get_string(OLLAMA_TAGS_URL, MAX_TAGS_BYTES)?;
+    parse_ollama_tags(&body)
+}
+
 /// Build the `POST /v1/chat/completions` call for `model`.
 ///
 /// `schema` is embedded as the caller passed it. The schema name is always
@@ -265,5 +334,51 @@ mod tests {
     fn a_null_content_is_an_error() {
         let body = r#"{"choices":[{"message":{"content":null}}]}"#;
         assert!(matches!(read_completion(body), Err(ModelError::Unreadable)));
+    }
+
+    #[test]
+    fn ollama_tags_returns_model_names() {
+        let body = r#"{"models":[{"name":"llama3.2"},{"name":"qwen"}]}"#;
+        assert_eq!(
+            parse_ollama_tags(body).unwrap(),
+            vec!["llama3.2".to_string(), "qwen".to_string()]
+        );
+    }
+
+    #[test]
+    fn an_empty_ollama_name_is_skipped() {
+        let body = r#"{"models":[{"name":""},{"name":"llama3.2"}]}"#;
+        assert_eq!(
+            parse_ollama_tags(body).unwrap(),
+            vec!["llama3.2".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_nameless_ollama_entry_is_unreadable() {
+        assert!(matches!(
+            parse_ollama_tags(r#"{"models":[{"size":1}]}"#),
+            Err(ModelError::Unreadable)
+        ));
+    }
+
+    #[test]
+    fn ollama_tags_without_a_models_array_are_unreadable() {
+        assert!(matches!(
+            parse_ollama_tags("{}"),
+            Err(ModelError::Unreadable)
+        ));
+        assert!(matches!(
+            parse_ollama_tags(r#"{"models":{}}"#),
+            Err(ModelError::Unreadable)
+        ));
+    }
+
+    #[test]
+    fn truncated_ollama_tags_are_unreadable() {
+        assert!(matches!(
+            parse_ollama_tags(r#"{"models":[{"name":"llama"#),
+            Err(ModelError::Unreadable)
+        ));
     }
 }

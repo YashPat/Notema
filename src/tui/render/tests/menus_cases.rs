@@ -235,24 +235,27 @@ fn settings_dialog_lists_categories_rows_and_description() {
 
     let mut app = app_with_journals(&["work"]);
     app.open_settings();
-    let area = Rect::new(0, 0, 72, 30);
+    // Tall enough that the Model row, last in the list, is on screen.
+    let area = Rect::new(0, 0, 72, 40);
     let mut view = crate::tui::ui::ViewState::default();
     let text = render_to_text(area.width, area.height, |frame| {
         draw_app(frame, &mut app, &mut view)
     });
 
-    // One dialog with the three categories as sub-headers, their settings and
+    // One dialog with the categories as sub-headers, their settings and
     // values, and the highlighted (Theme) row's description inside the frame.
     assert!(text.contains("Settings"));
     assert!(text.contains("Appearance"));
     assert!(text.contains("Reader"));
     assert!(text.contains("Editor"));
+    assert!(text.contains("Model"));
+    assert!(text.contains("Not set"));
     assert!(text.contains("Theme"));
     assert!(text.contains("Center body vertically"));
     assert!(text.contains("Show link URLs"));
     assert!(text.contains("Choose the color theme"));
 
-    // Every setting row registers a clickable region; the three sub-headers do
+    // Every setting row registers a clickable region; the sub-headers do
     // not, so the count matches the number of settings, not the line count.
     let setting_rows: usize = crate::tui::features::settings::SettingCategory::ALL
         .iter()

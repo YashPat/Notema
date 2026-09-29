@@ -413,6 +413,7 @@ mod tests {
 
         app.press_autofill().unwrap();
 
+        assert!(matches!(app.overlay, crate::tui::state::Overlay::None));
         assert!(!app.autofill.has_pending());
         assert!(!app.autofill.is_tracked(&id));
         let toast = app.toasts.items().last().unwrap();

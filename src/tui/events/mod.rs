@@ -46,6 +46,7 @@ pub(crate) struct DispatchOutcome {
 #[derive(Debug, PartialEq)]
 pub(crate) enum Effect {
     Geocode(crate::tui::geocode::GeocodeRequest),
+    FetchOllamaTags(crate::tui::ollama_tags::OllamaTagsRequest),
     Environment(crate::tui::environment::EnvironmentRequest),
     PrepareImages(crate::tui::image::WarmRequest),
     Open {
@@ -261,7 +262,11 @@ fn apply_action<B: Backend>(
                 return Ok(outcome);
             }
         }
-        Action::Settings(action) => handlers::settings(terminal, app, action)?,
+        Action::Settings(action) => {
+            if let Some(outcome) = handlers::settings(terminal, app, action)? {
+                return Ok(outcome);
+            }
+        }
         Action::Images(action) => {
             if let Some(outcome) = handlers::images(terminal, app, action)? {
                 return Ok(outcome);
@@ -317,6 +322,7 @@ fn apply_background_action(app: &mut AppModel, action: BackgroundAction) -> Disp
         }
         BackgroundAction::PollImages => app.image.runtime.poll_results(),
         BackgroundAction::PollGeocode => app.apply_geocode_results(),
+        BackgroundAction::PollOllamaTags => app.apply_ollama_tags(),
         BackgroundAction::PollEnvironment => app.apply_environment_results(),
         BackgroundAction::PollAutofill => app.apply_autofill_results(),
         BackgroundAction::PollLibraryReload => app.apply_library_reload_results(),
@@ -652,7 +658,11 @@ fn open_dialog_list_height<B: Backend>(
             .list
             .height
     } else if let Some(state) = app.settings_state() {
-        render::settings_dialog_layout(&app.appearance.theme, area, state)
+        render::settings_dialog_layout(&app.appearance.theme, area, state, &app.services.config)
+            .list
+            .height
+    } else if let Some(state) = app.model_setup_state() {
+        render::model_setup_layout(&app.appearance.theme, area, state)
             .list
             .height
     } else {
@@ -677,6 +687,9 @@ fn open_dialog_list_mut(app: &mut AppModel) -> Option<&mut dyn ListNav> {
     }
     if app.settings_state().is_some() {
         return app.settings_state_mut().map(|s| s as &mut dyn ListNav);
+    }
+    if app.model_setup_state().is_some() {
+        return app.model_setup_state_mut().map(|s| s as &mut dyn ListNav);
     }
     if app.filter_state().is_some() {
         return app.filter_state_mut().map(|s| s as &mut dyn ListNav);

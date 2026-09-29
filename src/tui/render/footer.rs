@@ -82,6 +82,8 @@ pub(crate) enum HintId {
     MoveSuggestion,
     CommitSuggestion,
     DismissSuggestions,
+    /// Esc in model setup: back one screen, or return to the Model settings row.
+    ModelSetupBack,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

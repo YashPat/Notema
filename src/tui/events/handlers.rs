@@ -405,7 +405,7 @@ pub(super) fn settings<B: Backend>(
     terminal: &mut Terminal<B>,
     app: &mut AppModel,
     action: SettingsAction,
-) -> AppResult<()> {
+) -> AppResult<Option<DispatchOutcome>> {
     match action {
         SettingsAction::NewJournal => app.begin_new_journal_input(),
         SettingsAction::ToggleArchiveJournal => {
@@ -414,13 +414,21 @@ pub(super) fn settings<B: Backend>(
         }
         SettingsAction::JournalInputSubmit => submit_new_journal(app)?,
         SettingsAction::OpenSettings => app.open_settings(),
-        SettingsAction::Activate => activate_highlighted_setting(terminal, app)?,
-        SettingsAction::Adjust(dir) => app.settings_adjust(dir),
+        SettingsAction::Activate => {
+            if let Some(outcome) = activate_highlighted_setting(terminal, app)? {
+                return Ok(Some(outcome));
+            }
+        }
+        SettingsAction::Adjust(dir) => {
+            if let Some(outcome) = with_tags_fetch(app.settings_adjust(dir)) {
+                return Ok(Some(outcome));
+            }
+        }
         SettingsAction::Click(index) => {
             let already = app.settings_state().and_then(|s| s.selected_index()) == Some(index);
             app.settings_select(index);
-            if already {
-                activate_highlighted_setting(terminal, app)?;
+            if already && let Some(outcome) = activate_highlighted_setting(terminal, app)? {
+                return Ok(Some(outcome));
             }
         }
         SettingsAction::ThemePickerSelect(index) => app.theme_picker_select(index),
@@ -440,21 +448,61 @@ pub(super) fn settings<B: Backend>(
             app.theme_picker_toggle_scope();
             reveal_open_dialog_selection(terminal, app)?;
         }
+        SettingsAction::ModelSetupMove(delta) => {
+            navigate_open_dialog(terminal, app, |list| {
+                if delta < 0 {
+                    list.move_up();
+                } else if delta > 0 {
+                    list.move_down();
+                }
+            })?;
+        }
+        SettingsAction::ModelSetupActivate => {
+            let request = app.model_setup_activate();
+            reveal_open_dialog_selection(terminal, app)?;
+            if let Some(outcome) = with_tags_fetch(request) {
+                return Ok(Some(outcome));
+            }
+        }
+        SettingsAction::ModelSetupCancel => {
+            app.model_setup_cancel();
+            reveal_open_dialog_selection(terminal, app)?;
+        }
+        SettingsAction::ModelSetupClick(index) => {
+            let already = app.model_setup_state().and_then(|s| s.selected_index()) == Some(index);
+            app.model_setup_select(index);
+            if already {
+                let request = app.model_setup_activate();
+                reveal_open_dialog_selection(terminal, app)?;
+                if let Some(outcome) = with_tags_fetch(request) {
+                    return Ok(Some(outcome));
+                }
+            }
+        }
     }
-    Ok(())
+    Ok(None)
 }
 
-/// Activate the highlighted setting, then — if that opened the theme picker —
-/// scroll its selection into view.
+/// Activate the highlighted setting, then scroll the opened dialog's selection
+/// into view. Opening Local yields the tag-list fetch.
 fn activate_highlighted_setting<B: Backend>(
     terminal: &mut Terminal<B>,
     app: &mut AppModel,
-) -> AppResult<()> {
-    app.settings_activate();
-    if matches!(app.overlay, Overlay::ThemePicker(_)) {
+) -> AppResult<Option<DispatchOutcome>> {
+    let request = app.settings_activate();
+    if matches!(
+        app.overlay,
+        Overlay::ThemePicker(_) | Overlay::ModelSetup(_)
+    ) {
         reveal_open_dialog_selection(terminal, app)?;
     }
-    Ok(())
+    Ok(with_tags_fetch(request))
+}
+
+fn with_tags_fetch(
+    request: Option<crate::tui::ollama_tags::OllamaTagsRequest>,
+) -> Option<DispatchOutcome> {
+    request.map(|request| DispatchOutcome::Continue.with_effect(Effect::FetchOllamaTags(request)))
 }
 
 pub(super) fn images<B: Backend>(
