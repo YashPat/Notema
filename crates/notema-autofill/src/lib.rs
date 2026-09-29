@@ -1,11 +1,12 @@
-//! The autofill decision.
+//! The autofill decision and the prompt that asks for it.
 //!
-//! Given a model response and the entry's current fields, decide which empty
-//! fields to write and the outcome sentence. No I/O and no terminal types.
+//! [`autofill_prompt`] builds the system string, the entry string, and the JSON
+//! schema. [`decide_autofill`] reads a model response and decides which empty
+//! fields to write. No I/O and no terminal types.
 
 #![forbid(unsafe_code)]
 
-use notema_domain::{MOOD_RANGE, normalize_feelings};
+use notema_domain::{MOOD_RANGE, feelings, normalize_feelings};
 use serde_json::Value;
 
 /// The four fields autofill may write, as they stand on the entry now.
@@ -30,6 +31,124 @@ pub struct AutofillDecision {
     pub activities: Option<Vec<String>>,
     pub mood: Option<i8>,
     pub outcome: String,
+}
+
+/// The system string, the entry string, and the JSON schema for one autofill call.
+///
+/// The caller maps `system` and `entry` onto chat messages. This crate does not
+/// call the model.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AutofillPrompt {
+    pub system: String,
+    pub entry: String,
+    pub schema: Value,
+}
+
+/// Build the prompt for one entry.
+///
+/// `known_people` and `known_activities` are the distinct strings already stored
+/// on entries. Blank strings are dropped. This function does not walk the journal.
+pub fn autofill_prompt(
+    body: &str,
+    current: &CurrentFields,
+    known_people: &[String],
+    known_activities: &[String],
+) -> AutofillPrompt {
+    AutofillPrompt {
+        system: system_prompt(known_people, known_activities),
+        entry: entry_prompt(body, current),
+        schema: response_schema(),
+    }
+}
+
+fn system_prompt(known_people: &[String], known_activities: &[String]) -> String {
+    let feeling_names: Vec<&str> = feelings().collect();
+    let feelings_json = serde_json::to_string(&feeling_names).expect("feeling names are strings");
+    let people_json = serde_json::to_string(&listed(known_people)).expect("people are strings");
+    let activities_json =
+        serde_json::to_string(&listed(known_activities)).expect("activities are strings");
+    let mood_start = *MOOD_RANGE.start();
+    let mood_end = *MOOD_RANGE.end();
+
+    format!(
+        "\
+Return only a JSON object with keys \"feelings\", \"people\", \"activities\", and \"mood\".
+Use only these feeling names: {feelings_json}
+Mood is an integer from {mood_start} to {mood_end}.
+People already used in this journal: {people_json}
+Activities already used in this journal: {activities_json}
+Reuse a name from those lists when it is the same person, or same activity. Add a new name only when it is worth adding.
+Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
+    )
+}
+
+fn listed(values: &[String]) -> Vec<&str> {
+    values
+        .iter()
+        .filter(|value| !value.trim().is_empty())
+        .map(String::as_str)
+        .collect()
+}
+
+fn entry_prompt(body: &str, current: &CurrentFields) -> String {
+    format!(
+        "Body:\n{body}\nAlready entered: {}\nEmpty: {}",
+        already_entered(current),
+        empty_names(current),
+    )
+}
+
+fn already_entered(current: &CurrentFields) -> String {
+    let mut parts = Vec::new();
+    if !current.feelings.is_empty() {
+        parts.push(json_field("feelings", &current.feelings));
+    }
+    if !current.people.is_empty() {
+        parts.push(json_field("people", &current.people));
+    }
+    if !current.activities.is_empty() {
+        parts.push(json_field("activities", &current.activities));
+    }
+    if let Some(mood) = current.mood {
+        parts.push(format!("\"mood\":{mood}"));
+    }
+    format!("{{{}}}", parts.join(","))
+}
+
+fn json_field(name: &str, values: &[String]) -> String {
+    let encoded = serde_json::to_string(values).expect("field values are strings");
+    format!("\"{name}\":{encoded}")
+}
+
+fn empty_names(current: &CurrentFields) -> String {
+    let mut names = Vec::new();
+    if current.feelings.is_empty() {
+        names.push("feelings");
+    }
+    if current.people.is_empty() {
+        names.push("people");
+    }
+    if current.activities.is_empty() {
+        names.push("activities");
+    }
+    if current.mood.is_none() {
+        names.push("mood");
+    }
+    serde_json::to_string(&names).expect("field names are strings")
+}
+
+fn response_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            "feelings": { "type": "array", "items": { "type": "string" } },
+            "people": { "type": "array", "items": { "type": "string" } },
+            "activities": { "type": "array", "items": { "type": "string" } },
+            "mood": { "type": "integer" }
+        },
+        "required": ["feelings", "people", "activities", "mood"],
+        "additionalProperties": false
+    })
 }
 
 /// Decide which empty fields `response` may fill.
@@ -313,5 +432,98 @@ mod tests {
     fn outcome_joins_three_fields() {
         let decision = decide("{\"feelings\":[\"calm\"],\"people\":[\"Sam\"],\"mood\":2}");
         assert_eq!(decision.outcome, "Autofilled feelings, people, and mood");
+    }
+
+    #[test]
+    fn schema_is_stable_and_unconstrained() {
+        let first = autofill_prompt("one", &CurrentFields::default(), &[], &[]);
+        let second = autofill_prompt(
+            "two",
+            &CurrentFields {
+                mood: Some(0),
+                ..CurrentFields::default()
+            },
+            &["Sam".to_string()],
+            &["hiking".to_string()],
+        );
+        assert_eq!(first.schema, second.schema);
+        let text = first.schema.to_string();
+        assert!(!text.contains("enum"));
+        assert!(first.schema["properties"]["mood"].get("minimum").is_none());
+        assert!(first.schema["properties"]["mood"].get("maximum").is_none());
+        assert_eq!(
+            first.schema["required"],
+            serde_json::json!(["feelings", "people", "activities", "mood"])
+        );
+        assert_eq!(first.schema["additionalProperties"], false);
+        assert_eq!(first.schema["properties"]["feelings"]["type"], "array");
+        assert_eq!(first.schema["properties"]["mood"]["type"], "integer");
+    }
+
+    #[test]
+    fn system_lists_canonical_feelings_bounds_and_known_names() {
+        let prompt = autofill_prompt(
+            "body",
+            &CurrentFields::default(),
+            &["Ada".to_string(), "  ".to_string(), "Sam".to_string()],
+            &["hiking".to_string()],
+        );
+        assert!(prompt.system.contains("\"happy\""));
+        assert!(!prompt.system.contains("joyous"));
+        assert!(prompt.system.contains("Mood is an integer from -5 to 5."));
+        assert!(
+            prompt
+                .system
+                .contains("People already used in this journal: [\"Ada\",\"Sam\"]")
+        );
+        assert!(
+            prompt
+                .system
+                .contains("Activities already used in this journal: [\"hiking\"]")
+        );
+        assert!(prompt.system.contains(
+            "Reuse a name from those lists when it is the same person, or same activity."
+        ));
+        assert!(prompt.system.contains(
+            "Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
+        ));
+    }
+
+    #[test]
+    fn empty_known_lists_are_empty_arrays() {
+        let prompt = autofill_prompt("body", &CurrentFields::default(), &[], &[]);
+        assert!(
+            prompt
+                .system
+                .contains("People already used in this journal: []")
+        );
+        assert!(
+            prompt
+                .system
+                .contains("Activities already used in this journal: []")
+        );
+    }
+
+    #[test]
+    fn entry_keeps_set_fields_and_names_empty_ones() {
+        let current = CurrentFields {
+            feelings: vec![],
+            people: vec!["Ada".to_string()],
+            activities: vec![],
+            mood: Some(0),
+        };
+        let prompt = autofill_prompt("Walked.\n", &current, &[], &[]);
+        assert!(prompt.entry.starts_with("Body:\nWalked.\n"));
+        assert!(
+            prompt
+                .entry
+                .contains("Already entered: {\"people\":[\"Ada\"],\"mood\":0}")
+        );
+        assert!(
+            prompt
+                .entry
+                .contains("Empty: [\"feelings\",\"activities\"]")
+        );
+        assert!(!prompt.entry.contains("\"feelings\":"));
     }
 }
