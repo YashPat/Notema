@@ -238,6 +238,11 @@ show_link_urls = false
 body_center_vertically = false  # seeded off for a new config; drop it to follow the reader
 # body_max_width = 80           # absent = follow [ui.layout.reader]
 # body_max_top_padding = 0
+
+[model]                         # omitted while unset; device-only, never synced
+base_url = "http://127.0.0.1:11434/v1"
+model = "llama3.2"
+token = "secret"                # optional; a later version moves this to the keychain and keeps the field so old files still load
 ```
 
 `state.toml` — machine-written session state, kept out of your settings:

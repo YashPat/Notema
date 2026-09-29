@@ -22,6 +22,9 @@ pub(crate) struct Config {
     pub editor: EditorSection,
     #[serde(default)]
     pub location: LocationSection,
+    /// Left out of the file entirely while nothing is set.
+    #[serde(default, skip_serializing_if = "ModelSection::is_unset")]
+    pub model: ModelSection,
 }
 
 /// Which journals to open and where they live on disk.
@@ -67,6 +70,36 @@ pub(crate) struct LocationSection {
     /// the location can't be resolved to one.
     #[serde(default = "default_true")]
     pub use_location_timezone: bool,
+}
+
+/// Where a chat completion is sent. Device-only; the journal never stores this.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ModelSection {
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub model: String,
+    /// Stays optional so a later keychain copy can drop it from the file (`docs/WIPFeatures/ai.md`).
+    #[serde(default, skip_serializing_if = "token_is_blank")]
+    pub token: Option<String>,
+}
+
+impl ModelSection {
+    pub(crate) fn is_unset(&self) -> bool {
+        self.base_url.trim().is_empty()
+            && self.model.trim().is_empty()
+            && token_is_blank(&self.token)
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn is_configured(&self) -> bool {
+        !self.base_url.trim().is_empty() && !self.model.trim().is_empty()
+    }
+}
+
+fn token_is_blank(token: &Option<String>) -> bool {
+    token.as_ref().is_none_or(|value| value.trim().is_empty())
 }
 
 /// TUI presentation preferences.
@@ -332,6 +365,7 @@ impl Config {
             ui,
             editor: EditorSection::default(),
             location: LocationSection::default(),
+            model: ModelSection::default(),
         }
     }
 
@@ -711,6 +745,81 @@ mod tests {
             loaded.ui.layout.editor_body(),
             loaded.ui.layout.reader_body()
         );
+    }
+
+    #[test]
+    fn missing_model_section_stays_out_of_the_file() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        fs::write(
+            &path,
+            "schema_version = 1\n\n[journal]\npath = \"~/Journals\"\n",
+        )
+        .unwrap();
+
+        let config = load_config(&path).unwrap();
+        assert!(config.model.is_unset());
+        assert!(!config.model.is_configured());
+
+        save_config(&path, &config).unwrap();
+        let written = fs::read_to_string(&path).unwrap();
+        assert!(!written.contains("[model]"), "{written}");
+    }
+
+    #[test]
+    fn model_section_round_trips() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut config = Config::new(dir.path().join("root"));
+        config.model.base_url = "http://127.0.0.1:11434/v1".to_string();
+        config.model.model = "llama3.2".to_string();
+        config.model.token = Some("secret".to_string());
+        assert!(config.model.is_configured());
+
+        save_config(&path, &config).unwrap();
+        assert_eq!(load_config(&path).unwrap(), config);
+    }
+
+    #[test]
+    fn blank_model_token_is_dropped_on_save() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        for token in ["", "  "] {
+            fs::write(
+                &path,
+                format!(
+                    "schema_version = 1\n\n[journal]\npath = \"root\"\n\n[model]\nbase_url = \"http://127.0.0.1:11434/v1\"\nmodel = \"llama3.2\"\ntoken = \"{token}\"\n"
+                ),
+            )
+            .unwrap();
+
+            let config = load_config(&path).unwrap();
+            assert!(config.model.is_configured());
+            save_config(&path, &config).unwrap();
+            let written = fs::read_to_string(&path).unwrap();
+            assert!(!written.contains("token"), "{written}");
+            assert!(load_config(&path).unwrap().model.token.is_none());
+        }
+    }
+
+    #[test]
+    fn model_url_without_a_name_is_saved_and_not_configured() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut config = Config::new(dir.path().join("root"));
+        config.model.base_url = "http://127.0.0.1:11434/v1".to_string();
+        assert!(!config.model.is_configured());
+
+        save_config(&path, &config).unwrap();
+        let written = fs::read_to_string(&path).unwrap();
+        assert!(written.contains("[model]"), "{written}");
+        assert!(written.contains("base_url"), "{written}");
+        assert!(!written.contains("token"), "{written}");
+
+        let loaded = load_config(&path).unwrap();
+        assert!(!loaded.model.is_configured());
+        assert_eq!(loaded.model.base_url, config.model.base_url);
+        assert!(loaded.model.model.is_empty());
     }
 
     #[test]
