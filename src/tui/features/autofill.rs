@@ -75,9 +75,7 @@ impl AppModel {
         let body = entry.body.clone();
         self.replace_entry_from_disk(entry);
 
-        let known_people = known_names(self, MetadataKind::People);
-        let known_activities = known_names(self, MetadataKind::Activities);
-        let prompt = autofill_prompt(&body, &current, &known_people, &known_activities);
+        let prompt = autofill_prompt(&body, &current);
         let model = chat_model(&self.services.config.model);
         let cancel = Arc::new(AtomicBool::new(false));
         let request = AutofillRequest {
@@ -223,7 +221,14 @@ impl AppModel {
         if body_hash(&entry.body) != job.body_hash || job.cancel.load(Ordering::Acquire) {
             return WriteAutofill::Changed;
         }
-        let decision = decide_autofill(&current_fields(&entry), text);
+        let known_people = known_names(self, MetadataKind::People);
+        let known_activities = known_names(self, MetadataKind::Activities);
+        let decision = decide_autofill(
+            &current_fields(&entry),
+            text,
+            &known_people,
+            &known_activities,
+        );
         if decision.feelings.is_none()
             && decision.people.is_none()
             && decision.activities.is_none()

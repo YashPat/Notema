@@ -2488,6 +2488,7 @@ version = "2026.8.0"
 dependencies = [
  "notema-domain",
  "serde_json",
+ "strsim",
 ]
 
 [[package]]

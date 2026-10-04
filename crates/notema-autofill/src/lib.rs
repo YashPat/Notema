@@ -52,27 +52,18 @@ pub struct AutofillPrompt {
 
 /// Build the prompt for one entry.
 ///
-/// `known_people` and `known_activities` are the distinct strings already stored
-/// on entries. Blank strings are dropped. This function does not walk the journal.
-pub fn autofill_prompt(
-    body: &str,
-    current: &CurrentFields,
-    known_people: &[String],
-    known_activities: &[String],
-) -> AutofillPrompt {
+/// This function does not walk the journal.
+pub fn autofill_prompt(body: &str, current: &CurrentFields) -> AutofillPrompt {
     AutofillPrompt {
-        system: system_prompt(known_people, known_activities),
+        system: system_prompt(),
         entry: entry_prompt(body, current),
         schema: response_schema(),
     }
 }
 
-fn system_prompt(known_people: &[String], known_activities: &[String]) -> String {
+fn system_prompt() -> String {
     let feeling_names: Vec<&str> = feelings().collect();
     let feelings_json = serde_json::to_string(&feeling_names).expect("feeling names are strings");
-    let people_json = serde_json::to_string(&listed(known_people)).expect("people are strings");
-    let activities_json =
-        serde_json::to_string(&listed(known_activities)).expect("activities are strings");
     let mood_start = *MOOD_RANGE.start();
     let mood_end = *MOOD_RANGE.end();
 
@@ -81,20 +72,9 @@ fn system_prompt(known_people: &[String], known_activities: &[String]) -> String
 Return only a JSON object with keys \"feelings\", \"people\", \"activities\", and \"mood\".
 Use only these feeling names: {feelings_json}
 Mood is an integer from {mood_start} to {mood_end}.
-People already used: {people_json}
-Activities already used: {activities_json}
-Reuse a name from those lists when it is the same person, or same activity. Add a new name only when it is worth adding.
 An activity is something they would look up later, like hiking or coding. A meal, an errand, a commute, or a routine chore is not an activity.
 Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
     )
-}
-
-fn listed(values: &[String]) -> Vec<&str> {
-    values
-        .iter()
-        .filter(|value| !value.trim().is_empty())
-        .map(String::as_str)
-        .collect()
 }
 
 fn entry_prompt(body: &str, current: &CurrentFields) -> String {
@@ -162,9 +142,16 @@ fn response_schema() -> Value {
 ///
 /// Strips one wrapping code fence, then reads
 /// `{"feelings":[...],"people":[...],"activities":[...],"mood":N}`.
+/// A person or activity that matches a string in `known_people` or
+/// `known_activities` is written with that stored spelling.
 /// A failed parse yields every field [`None`] and outcome [`UNREADABLE_REPLY`].
 /// A parsed reply with nothing valid left to write uses [`NOTHING_TO_ADD`].
-pub fn decide_autofill(current: &CurrentFields, response: &str) -> AutofillDecision {
+pub fn decide_autofill(
+    current: &CurrentFields,
+    response: &str,
+    known_people: &[String],
+    known_activities: &[String],
+) -> AutofillDecision {
     let Some(object) = model_object(response) else {
         return failed(UNREADABLE_REPLY);
     };
@@ -174,15 +161,15 @@ pub fn decide_autofill(current: &CurrentFields, response: &str) -> AutofillDecis
         object.get("feelings"),
         feelings_from,
     );
-    let people = assign_list(
+    let people = assign_names(
         current.people.is_empty(),
         object.get("people"),
-        free_form_from,
+        known_people,
     );
-    let activities = assign_list(
+    let activities = assign_names(
         current.activities.is_empty(),
         object.get("activities"),
-        free_form_from,
+        known_activities,
     );
     let mood = assign_mood(current.mood.is_none(), object.get("mood"));
 
@@ -278,6 +265,75 @@ fn assign_list(
     }
 }
 
+fn assign_names(unset: bool, value: Option<&Value>, known: &[String]) -> Option<Vec<String>> {
+    if !unset {
+        return None;
+    }
+    let parsed = canonicalize_names(&free_form_from(value?)?, known);
+    if parsed.is_empty() {
+        None
+    } else {
+        Some(parsed)
+    }
+}
+
+/// Reuse a stored spelling when the reply is the same name, one edit away on a
+/// name of at least five characters, or at least 90% of the longer string.
+fn canonicalize_names(values: &[String], known: &[String]) -> Vec<String> {
+    let mut canonical = Vec::with_capacity(values.len());
+    for value in values {
+        let name = canonicalize_name(value, known);
+        if canonical.iter().any(|existing| existing == &name) {
+            continue;
+        }
+        canonical.push(name);
+    }
+    canonical
+}
+
+fn canonicalize_name(value: &str, known: &[String]) -> String {
+    let folded = value.to_lowercase();
+    if let Some(stored) = known.iter().find_map(|candidate| {
+        let stored = candidate.trim();
+        (!stored.is_empty() && stored.to_lowercase() == folded).then_some(stored)
+    }) {
+        return stored.to_string();
+    }
+
+    let value_len = folded.chars().count();
+    let mut best: Option<(usize, usize, usize)> = None;
+    for (index, candidate) in known.iter().enumerate() {
+        let stored = candidate.trim();
+        if stored.is_empty() {
+            continue;
+        }
+        let stored_folded = stored.to_lowercase();
+        let stored_len = stored_folded.chars().count();
+        let distance = strsim::levenshtein(&folded, &stored_folded);
+        let shorter = value_len.min(stored_len);
+        let longer = value_len.max(stored_len);
+        if !name_is_close(distance, shorter, longer) {
+            continue;
+        }
+        let closer = match best {
+            Some((best_distance, best_longer, _)) => {
+                distance * best_longer < best_distance * longer
+            }
+            None => true,
+        };
+        if closer {
+            best = Some((distance, longer, index));
+        }
+    }
+
+    best.map(|(_, _, index)| known[index].trim().to_string())
+        .unwrap_or_else(|| value.to_string())
+}
+
+fn name_is_close(distance: usize, shorter: usize, longer: usize) -> bool {
+    (distance == 1 && shorter >= 5) || distance.saturating_mul(10) <= longer
+}
+
 fn assign_mood(unset: bool, value: Option<&Value>) -> Option<i8> {
     if !unset {
         return None;
@@ -320,7 +376,13 @@ mod tests {
     use super::*;
 
     fn decide(response: &str) -> AutofillDecision {
-        decide_autofill(&CurrentFields::default(), response)
+        decide_autofill(&CurrentFields::default(), response, &[], &[])
+    }
+
+    fn decide_known(response: &str, people: &[&str], activities: &[&str]) -> AutofillDecision {
+        let people: Vec<String> = people.iter().copied().map(str::to_string).collect();
+        let activities: Vec<String> = activities.iter().copied().map(str::to_string).collect();
+        decide_autofill(&CurrentFields::default(), response, &people, &activities)
     }
 
     #[test]
@@ -367,6 +429,8 @@ mod tests {
         let decision = decide_autofill(
             &current,
             "{\"people\":[\"Sam\"],\"activities\":[\"hiking\"]}",
+            &[],
+            &[],
         );
         assert_eq!(decision.people, None);
         assert_eq!(
@@ -453,15 +517,13 @@ mod tests {
 
     #[test]
     fn schema_is_stable_and_unconstrained() {
-        let first = autofill_prompt("one", &CurrentFields::default(), &[], &[]);
+        let first = autofill_prompt("one", &CurrentFields::default());
         let second = autofill_prompt(
             "two",
             &CurrentFields {
                 mood: Some(0),
                 ..CurrentFields::default()
             },
-            &["Sam".to_string()],
-            &["hiking".to_string()],
         );
         assert_eq!(first.schema, second.schema);
         let text = first.schema.to_string();
@@ -478,29 +540,13 @@ mod tests {
     }
 
     #[test]
-    fn system_lists_canonical_feelings_bounds_and_known_names() {
-        let prompt = autofill_prompt(
-            "body",
-            &CurrentFields::default(),
-            &["Ada".to_string(), "  ".to_string(), "Sam".to_string()],
-            &["hiking".to_string()],
-        );
+    fn system_lists_canonical_feelings_and_bounds() {
+        let prompt = autofill_prompt("body", &CurrentFields::default());
         assert!(prompt.system.contains("\"happy\""));
         assert!(!prompt.system.contains("joyous"));
         assert!(prompt.system.contains("Mood is an integer from -5 to 5."));
-        assert!(
-            prompt
-                .system
-                .contains("People already used: [\"Ada\",\"Sam\"]")
-        );
-        assert!(
-            prompt
-                .system
-                .contains("Activities already used: [\"hiking\"]")
-        );
-        assert!(prompt.system.contains(
-            "Reuse a name from those lists when it is the same person, or same activity."
-        ));
+        assert!(!prompt.system.contains("already used"));
+        assert!(!prompt.system.contains("Reuse a name"));
         assert!(
             prompt.system.contains(
                 "An activity is something they would look up later, like hiking or coding."
@@ -517,13 +563,6 @@ mod tests {
     }
 
     #[test]
-    fn empty_known_lists_are_empty_arrays() {
-        let prompt = autofill_prompt("body", &CurrentFields::default(), &[], &[]);
-        assert!(prompt.system.contains("People already used: []"));
-        assert!(prompt.system.contains("Activities already used: []"));
-    }
-
-    #[test]
     fn entry_keeps_set_fields_and_names_empty_ones() {
         let current = CurrentFields {
             feelings: vec![],
@@ -531,7 +570,7 @@ mod tests {
             activities: vec![],
             mood: Some(0),
         };
-        let prompt = autofill_prompt("Walked.\n", &current, &[], &[]);
+        let prompt = autofill_prompt("Walked.\n", &current);
         assert!(prompt.entry.starts_with("Body:\nWalked.\n"));
         assert!(
             prompt
@@ -544,5 +583,75 @@ mod tests {
                 .contains("Empty: [\"feelings\",\"activities\"]")
         );
         assert!(!prompt.entry.contains("\"feelings\":"));
+    }
+
+    #[test]
+    fn case_only_reuses_stored_spelling() {
+        let decision = decide_known("{\"people\":[\"sam\"]}", &["Sam"], &[]);
+        assert_eq!(
+            decision.people.as_deref(),
+            Some(["Sam".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn one_edit_typo_reuses_stored_name() {
+        let decision = decide_known(
+            "{\"activities\":[\"hicking\",\"cofee\"]}",
+            &[],
+            &["hiking", "coffee"],
+        );
+        assert_eq!(
+            decision.activities.as_deref(),
+            Some(["hiking".to_string(), "coffee".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn short_one_edit_pairs_stay_distinct() {
+        let decision = decide_known(
+            "{\"people\":[\"Alec\"],\"activities\":[\"hike\"]}",
+            &["Alex"],
+            &["hiking"],
+        );
+        assert_eq!(
+            decision.people.as_deref(),
+            Some(["Alec".to_string()].as_slice())
+        );
+        assert_eq!(
+            decision.activities.as_deref(),
+            Some(["hike".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn distant_name_stays_as_returned() {
+        let decision = decide_known("{\"people\":[\"Samuel\"]}", &["Sam"], &[]);
+        assert_eq!(
+            decision.people.as_deref(),
+            Some(["Samuel".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn near_misses_that_collapse_keep_one() {
+        let decision = decide_known(
+            "{\"activities\":[\"hicking\",\"hiking\"]}",
+            &[],
+            &["hiking"],
+        );
+        assert_eq!(
+            decision.activities.as_deref(),
+            Some(["hiking".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn tied_near_miss_keeps_the_first_stored_name() {
+        let decision = decide_known("{\"people\":[\"alpta\"]}", &["alpha", "altha"], &[]);
+        assert_eq!(
+            decision.people.as_deref(),
+            Some(["alpha".to_string()].as_slice())
+        );
     }
 }

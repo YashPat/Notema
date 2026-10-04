@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 notema-domain.workspace = true
 serde_json.workspace = true
+strsim.workspace = true
 
 [lints]
 workspace = true
