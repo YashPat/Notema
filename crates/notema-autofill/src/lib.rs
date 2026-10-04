@@ -33,6 +33,10 @@ pub struct AutofillDecision {
     pub outcome: String,
 }
 
+const MAX_FEELINGS: usize = 6;
+const MAX_PEOPLE: usize = 10;
+const MAX_ACTIVITIES: usize = 5;
+
 /// The response was not a JSON object autofill can read.
 pub const UNREADABLE_REPLY: &str = "Couldn't read the reply";
 
@@ -71,6 +75,7 @@ fn system_prompt() -> String {
         "\
 Return only a JSON object with keys \"feelings\", \"people\", \"activities\", and \"mood\".
 Use only these feeling names: {feelings_json}
+Return at most {MAX_FEELINGS} feelings, {MAX_PEOPLE} people, and {MAX_ACTIVITIES} activities.
 Mood is an integer from {mood_start} to {mood_end}.
 An activity is a kind of thing they would look up on other days, like hiking or coding. A name that fits only this entry is too specific. A particular show is watching TV. A particular movie is watching a movie. A particular book is reading.
 Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
@@ -128,9 +133,9 @@ fn response_schema() -> Value {
     serde_json::json!({
         "type": "object",
         "properties": {
-            "feelings": { "type": "array", "items": { "type": "string" } },
-            "people": { "type": "array", "items": { "type": "string" } },
-            "activities": { "type": "array", "items": { "type": "string" } },
+            "feelings": { "type": "array", "maxItems": MAX_FEELINGS, "items": { "type": "string" } },
+            "people": { "type": "array", "maxItems": MAX_PEOPLE, "items": { "type": "string" } },
+            "activities": { "type": "array", "maxItems": MAX_ACTIVITIES, "items": { "type": "string" } },
             "mood": { "type": "integer" }
         },
         "required": ["feelings", "people", "activities", "mood"],
@@ -144,6 +149,7 @@ fn response_schema() -> Value {
 /// `{"feelings":[...],"people":[...],"activities":[...],"mood":N}`.
 /// A person or activity that matches a string in `known_people` or
 /// `known_activities` is written with that stored spelling.
+/// Lists keep the first 6 feelings, 10 people, and 5 activities.
 /// A failed parse yields every field [`None`] and outcome [`UNREADABLE_REPLY`].
 /// A parsed reply with nothing valid left to write uses [`NOTHING_TO_ADD`].
 pub fn decide_autofill(
@@ -160,16 +166,19 @@ pub fn decide_autofill(
         current.feelings.is_empty(),
         object.get("feelings"),
         feelings_from,
+        MAX_FEELINGS,
     );
     let people = assign_names(
         current.people.is_empty(),
         object.get("people"),
         known_people,
+        MAX_PEOPLE,
     );
     let activities = assign_names(
         current.activities.is_empty(),
         object.get("activities"),
         known_activities,
+        MAX_ACTIVITIES,
     );
     let mood = assign_mood(current.mood.is_none(), object.get("mood"));
 
@@ -253,11 +262,13 @@ fn assign_list(
     unset: bool,
     value: Option<&Value>,
     parse: fn(&Value) -> Option<Vec<String>>,
+    max: usize,
 ) -> Option<Vec<String>> {
     if !unset {
         return None;
     }
-    let parsed = parse(value?)?;
+    let mut parsed = parse(value?)?;
+    parsed.truncate(max);
     if parsed.is_empty() {
         None
     } else {
@@ -265,11 +276,17 @@ fn assign_list(
     }
 }
 
-fn assign_names(unset: bool, value: Option<&Value>, known: &[String]) -> Option<Vec<String>> {
+fn assign_names(
+    unset: bool,
+    value: Option<&Value>,
+    known: &[String],
+    max: usize,
+) -> Option<Vec<String>> {
     if !unset {
         return None;
     }
-    let parsed = canonicalize_names(&free_form_from(value?)?, known);
+    let mut parsed = canonicalize_names(&free_form_from(value?)?, known);
+    parsed.truncate(max);
     if parsed.is_empty() {
         None
     } else {
@@ -536,6 +553,9 @@ mod tests {
         );
         assert_eq!(first.schema["additionalProperties"], false);
         assert_eq!(first.schema["properties"]["feelings"]["type"], "array");
+        assert_eq!(first.schema["properties"]["feelings"]["maxItems"], 6);
+        assert_eq!(first.schema["properties"]["people"]["maxItems"], 10);
+        assert_eq!(first.schema["properties"]["activities"]["maxItems"], 5);
         assert_eq!(first.schema["properties"]["mood"]["type"], "integer");
     }
 
@@ -544,6 +564,11 @@ mod tests {
         let prompt = autofill_prompt("body", &CurrentFields::default());
         assert!(prompt.system.contains("\"happy\""));
         assert!(!prompt.system.contains("joyous"));
+        assert!(
+            prompt
+                .system
+                .contains("Return at most 6 feelings, 10 people, and 5 activities.")
+        );
         assert!(prompt.system.contains("Mood is an integer from -5 to 5."));
         assert!(!prompt.system.contains("already used"));
         assert!(!prompt.system.contains("Reuse a name"));
@@ -649,6 +674,64 @@ mod tests {
         assert_eq!(
             decision.activities.as_deref(),
             Some(["hiking".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn extra_items_are_dropped_past_the_cap() {
+        let feelings = [
+            "happy",
+            "joyful",
+            "pleased",
+            "delighted",
+            "elated",
+            "ecstatic",
+            "excited",
+        ];
+        let people: Vec<String> = (1..=12).map(|n| format!("Person {n}")).collect();
+        let activities: Vec<String> = (1..=7).map(|n| format!("activity {n}")).collect();
+        let response = serde_json::json!({
+            "feelings": feelings,
+            "people": people,
+            "activities": activities,
+        })
+        .to_string();
+        let decision = decide(&response);
+        assert_eq!(
+            decision.feelings.as_deref(),
+            Some(
+                [
+                    "happy".to_string(),
+                    "joyful".to_string(),
+                    "pleased".to_string(),
+                    "delighted".to_string(),
+                    "elated".to_string(),
+                    "ecstatic".to_string(),
+                ]
+                .as_slice()
+            )
+        );
+        assert_eq!(decision.people.as_ref().map(Vec::len), Some(10));
+        assert_eq!(
+            decision.people.as_ref().and_then(|names| names.first()),
+            Some(&"Person 1".to_string())
+        );
+        assert_eq!(
+            decision.people.as_ref().and_then(|names| names.last()),
+            Some(&"Person 10".to_string())
+        );
+        assert_eq!(
+            decision.activities.as_deref(),
+            Some(
+                [
+                    "activity 1".to_string(),
+                    "activity 2".to_string(),
+                    "activity 3".to_string(),
+                    "activity 4".to_string(),
+                    "activity 5".to_string(),
+                ]
+                .as_slice()
+            )
         );
     }
 
