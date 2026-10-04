@@ -72,7 +72,7 @@ fn system_prompt() -> String {
 Return only a JSON object with keys \"feelings\", \"people\", \"activities\", and \"mood\".
 Use only these feeling names: {feelings_json}
 Mood is an integer from {mood_start} to {mood_end}.
-An activity is something they would look up later, like hiking or coding. A meal, an errand, a commute, or a routine chore is not an activity.
+An activity is a kind of thing they would look up on other days, like hiking or coding. A name that fits only this entry is too specific. A particular show is watching TV. A particular movie is watching a movie. A particular book is reading.
 Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
     )
 }
@@ -547,16 +547,22 @@ mod tests {
         assert!(prompt.system.contains("Mood is an integer from -5 to 5."));
         assert!(!prompt.system.contains("already used"));
         assert!(!prompt.system.contains("Reuse a name"));
-        assert!(
-            prompt.system.contains(
-                "An activity is something they would look up later, like hiking or coding."
-            )
-        );
+        assert!(prompt.system.contains(
+            "An activity is a kind of thing they would look up on other days, like hiking or coding."
+        ));
         assert!(
             prompt
                 .system
-                .contains("A meal, an errand, a commute, or a routine chore is not an activity.")
+                .contains("A name that fits only this entry is too specific.")
         );
+        assert!(prompt.system.contains("A particular show is watching TV."));
+        assert!(
+            prompt
+                .system
+                .contains("A particular movie is watching a movie.")
+        );
+        assert!(prompt.system.contains("A particular book is reading."));
+        assert!(!prompt.system.contains("is not an activity"));
         assert!(prompt.system.contains(
             "Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
         ));
