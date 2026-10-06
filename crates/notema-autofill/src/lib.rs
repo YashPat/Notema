@@ -56,18 +56,25 @@ pub struct AutofillPrompt {
 
 /// Build the prompt for one entry.
 ///
-/// This function does not walk the journal.
-pub fn autofill_prompt(body: &str, current: &CurrentFields) -> AutofillPrompt {
+/// `known_activities` is the activity names already in the journal. This
+/// function does not walk the journal.
+pub fn autofill_prompt(
+    body: &str,
+    current: &CurrentFields,
+    known_activities: &[String],
+) -> AutofillPrompt {
     AutofillPrompt {
-        system: system_prompt(),
+        system: system_prompt(known_activities),
         entry: entry_prompt(body, current),
         schema: response_schema(),
     }
 }
 
-fn system_prompt() -> String {
+fn system_prompt(known_activities: &[String]) -> String {
     let feeling_names: Vec<&str> = feelings().collect();
     let feelings_json = serde_json::to_string(&feeling_names).expect("feeling names are strings");
+    let activities_json =
+        serde_json::to_string(known_activities).expect("activity names are strings");
     let mood_start = *MOOD_RANGE.start();
     let mood_end = *MOOD_RANGE.end();
 
@@ -75,9 +82,10 @@ fn system_prompt() -> String {
         "\
 Return only a JSON object with keys \"feelings\", \"people\", \"activities\", and \"mood\".
 Use only these feeling names: {feelings_json}
+Use only these activity names: {activities_json}
+Return an empty activities array when none fit.
 Return at most {MAX_FEELINGS} feelings, {MAX_PEOPLE} people, and {MAX_ACTIVITIES} activities.
 Mood is an integer from {mood_start} to {mood_end}.
-An activity is a kind of thing they would look up on other days, like hiking or coding. A name that fits only this entry is too specific. A particular show is watching TV. A particular movie is watching a movie. A particular book is reading.
 Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
     )
 }
@@ -147,8 +155,10 @@ fn response_schema() -> Value {
 ///
 /// Strips one wrapping code fence, then reads
 /// `{"feelings":[...],"people":[...],"activities":[...],"mood":N}`.
-/// A person or activity that matches a string in `known_people` or
-/// `known_activities` is written with that stored spelling.
+/// A person that matches a string in `known_people` is written with that
+/// stored spelling. A person that matches nothing is kept as returned.
+/// An activity is written only when it matches a string in `known_activities`,
+/// and is written with that stored spelling.
 /// Lists keep the first 6 feelings, 10 people, and 5 activities.
 /// A failed parse yields every field [`None`] and outcome [`UNREADABLE_REPLY`].
 /// A parsed reply with nothing valid left to write uses [`NOTHING_TO_ADD`].
@@ -173,12 +183,14 @@ pub fn decide_autofill(
         object.get("people"),
         known_people,
         MAX_PEOPLE,
+        false,
     );
     let activities = assign_names(
         current.activities.is_empty(),
         object.get("activities"),
         known_activities,
         MAX_ACTIVITIES,
+        true,
     );
     let mood = assign_mood(current.mood.is_none(), object.get("mood"));
 
@@ -281,11 +293,15 @@ fn assign_names(
     value: Option<&Value>,
     known: &[String],
     max: usize,
+    closed: bool,
 ) -> Option<Vec<String>> {
     if !unset {
         return None;
     }
     let mut parsed = canonicalize_names(&free_form_from(value?)?, known);
+    if closed {
+        parsed.retain(|name| known.iter().any(|stored| stored.trim() == name));
+    }
     parsed.truncate(max);
     if parsed.is_empty() {
         None
@@ -404,7 +420,11 @@ mod tests {
 
     #[test]
     fn fence_unwraps_one_json_block() {
-        let decision = decide("```json\n{\"people\":[\"Sam\"],\"activities\":[\"hiking\"]}\n```");
+        let decision = decide_known(
+            "```json\n{\"people\":[\"Sam\"],\"activities\":[\"hiking\"]}\n```",
+            &[],
+            &["hiking"],
+        );
         assert_eq!(
             decision.people.as_deref(),
             Some(["Sam".to_string()].as_slice())
@@ -447,7 +467,7 @@ mod tests {
             &current,
             "{\"people\":[\"Sam\"],\"activities\":[\"hiking\"]}",
             &[],
-            &[],
+            &["hiking".to_string()],
         );
         assert_eq!(decision.people, None);
         assert_eq!(
@@ -479,14 +499,22 @@ mod tests {
 
     #[test]
     fn outcome_names_only_written_fields() {
-        let decision = decide("{\"people\":[\"Sam\"],\"activities\":[\"hiking\"],\"mood\":9}");
+        let decision = decide_known(
+            "{\"people\":[\"Sam\"],\"activities\":[\"hiking\"],\"mood\":9}",
+            &[],
+            &["hiking"],
+        );
         assert_eq!(decision.mood, None);
         assert_eq!(decision.outcome, "Autofilled people and activities");
     }
 
     #[test]
     fn empty_list_is_not_written() {
-        let decision = decide("{\"people\":[],\"activities\":[\"hiking\"]}");
+        let decision = decide_known(
+            "{\"people\":[],\"activities\":[\"hiking\"]}",
+            &[],
+            &["hiking"],
+        );
         assert_eq!(decision.people, None);
         assert_eq!(decision.outcome, "Autofilled activities");
     }
@@ -534,13 +562,14 @@ mod tests {
 
     #[test]
     fn schema_is_stable_and_unconstrained() {
-        let first = autofill_prompt("one", &CurrentFields::default());
+        let first = autofill_prompt("one", &CurrentFields::default(), &[]);
         let second = autofill_prompt(
             "two",
             &CurrentFields {
                 mood: Some(0),
                 ..CurrentFields::default()
             },
+            &[],
         );
         assert_eq!(first.schema, second.schema);
         let text = first.schema.to_string();
@@ -561,9 +590,20 @@ mod tests {
 
     #[test]
     fn system_lists_canonical_feelings_and_bounds() {
-        let prompt = autofill_prompt("body", &CurrentFields::default());
+        let activities = vec!["hiking".to_string(), "coding".to_string()];
+        let prompt = autofill_prompt("body", &CurrentFields::default(), &activities);
         assert!(prompt.system.contains("\"happy\""));
         assert!(!prompt.system.contains("joyous"));
+        assert!(
+            prompt
+                .system
+                .contains("Use only these activity names: [\"hiking\",\"coding\"]")
+        );
+        assert!(
+            prompt
+                .system
+                .contains("Return an empty activities array when none fit.")
+        );
         assert!(
             prompt
                 .system
@@ -572,25 +612,14 @@ mod tests {
         assert!(prompt.system.contains("Mood is an integer from -5 to 5."));
         assert!(!prompt.system.contains("already used"));
         assert!(!prompt.system.contains("Reuse a name"));
-        assert!(prompt.system.contains(
-            "An activity is a kind of thing they would look up on other days, like hiking or coding."
-        ));
-        assert!(
-            prompt
-                .system
-                .contains("A name that fits only this entry is too specific.")
-        );
-        assert!(prompt.system.contains("A particular show is watching TV."));
-        assert!(
-            prompt
-                .system
-                .contains("A particular movie is watching a movie.")
-        );
-        assert!(prompt.system.contains("A particular book is reading."));
-        assert!(!prompt.system.contains("is not an activity"));
+        assert!(!prompt.system.contains("watching TV"));
+        assert!(!prompt.system.contains("too specific"));
         assert!(prompt.system.contains(
             "Copy a value the user already entered. Do not overwrite it. Choose a value only for an empty field."
         ));
+
+        let empty = autofill_prompt("body", &CurrentFields::default(), &[]);
+        assert!(empty.system.contains("Use only these activity names: []"));
     }
 
     #[test]
@@ -601,7 +630,7 @@ mod tests {
             activities: vec![],
             mood: Some(0),
         };
-        let prompt = autofill_prompt("Walked.\n", &current);
+        let prompt = autofill_prompt("Walked.\n", &current, &[]);
         assert!(prompt.entry.starts_with("Body:\nWalked.\n"));
         assert!(
             prompt
@@ -649,10 +678,23 @@ mod tests {
             decision.people.as_deref(),
             Some(["Alec".to_string()].as_slice())
         );
-        assert_eq!(
-            decision.activities.as_deref(),
-            Some(["hike".to_string()].as_slice())
+        assert_eq!(decision.activities, None);
+        assert_eq!(decision.outcome, "Autofilled people");
+    }
+
+    #[test]
+    fn unknown_activity_is_dropped() {
+        let decision = decide_known(
+            "{\"people\":[\"Sam\"],\"activities\":[\"skydiving\"]}",
+            &[],
+            &["hiking"],
         );
+        assert_eq!(decision.activities, None);
+        assert_eq!(
+            decision.people.as_deref(),
+            Some(["Sam".to_string()].as_slice())
+        );
+        assert_eq!(decision.outcome, "Autofilled people");
     }
 
     #[test]
@@ -690,13 +732,14 @@ mod tests {
         ];
         let people: Vec<String> = (1..=12).map(|n| format!("Person {n}")).collect();
         let activities: Vec<String> = (1..=7).map(|n| format!("activity {n}")).collect();
+        let known: Vec<&str> = activities.iter().map(String::as_str).collect();
         let response = serde_json::json!({
             "feelings": feelings,
             "people": people,
-            "activities": activities,
+            "activities": &activities,
         })
         .to_string();
-        let decision = decide(&response);
+        let decision = decide_known(&response, &[], &known);
         assert_eq!(
             decision.feelings.as_deref(),
             Some(

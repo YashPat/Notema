@@ -75,7 +75,8 @@ impl AppModel {
         let body = entry.body.clone();
         self.replace_entry_from_disk(entry);
 
-        let prompt = autofill_prompt(&body, &current);
+        let known_activities = known_names(self, MetadataKind::Activities);
+        let prompt = autofill_prompt(&body, &current, &known_activities);
         let model = chat_model(&self.services.config.model);
         let cancel = Arc::new(AtomicBool::new(false));
         let request = AutofillRequest {
