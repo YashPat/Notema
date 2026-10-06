@@ -2,7 +2,8 @@
 
 This repo is a fork. A finished copy is already installed on this machine and is in daily use. Its data is real user data. The debug copy must not read it, write it, delete it, or symlink it.
 
-- Installed copy: `~/.local/bin/notema` (standalone binary, version 2026.8.0)
+- Installed copy: `~/.local/bin/notema` (this fork's release build, version 2026.8.0, ad-hoc signed, rebuilt 2026-10-06). No self-updater.
+- Previous binary: `~/Library/Application Support/notema-cutover-20261006-000901/notema` (the 2026-10-04 build). That directory also holds copies of the live journals and config from this cutover, plus `journals.sha256` and `config.sha256`.
 - Live data: `~/Library/Application Support/de.paviro.notema` (config, device key, trust pins) and `~/Journals` (journal files, from `journal.path` in that config)
 - Path key: `NOTEMA_CONFIG` / `--config` selects the config directory (macOS default `~/Library/Application Support/de.paviro.notema`). `journal.path` inside that config selects the journal root. The keychain service and the location-helper directory are the bundle id `de.paviro.notema`.
 - Debug copy: `notema-dev` at `~/.local/bin/notema-dev` (wrapper) running `target/debug/notema-dev`
