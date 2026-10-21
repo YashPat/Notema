@@ -1,9 +1,10 @@
 use super::codec::EntryCodec;
 use super::create::EntryAssetOptions;
-use super::paths::entry_assets_dir;
+use super::paths::{entry_assets_dir, entry_assets_dir_name};
 use crate::{AppResult, EntryRevision, StorageError};
 use anyhow::{Context, bail};
-use notema_domain::{Metadata, MetadataField};
+use jiff::{Zoned, civil::Date};
+use notema_domain::{Metadata, MetadataField, Timestamp};
 use notema_encryption::{self as crypto, KeyPaths};
 use std::{
     ffi::OsStr,
@@ -255,6 +256,98 @@ fn render_edited_content(
     }
     parsed.datetime.edited_at = Some(crate::storage::to_offset_rfc3339(&jiff::Zoned::now()));
     Ok(crate::markdown::render_entry(&parsed, body))
+}
+
+/// Move an entry to another day, keeping its time of day and UTC offset. An
+/// entry filed under `<journal>/YYYY/MM/DD/` moves to the new day's folder
+/// along with its assets; one filed anywhere else keeps its path. Returns the
+/// entry's path afterwards.
+pub(crate) fn redate_entry(
+    codec: &EntryCodec<'_>,
+    root: &Path,
+    path: &Path,
+    date: Date,
+) -> AppResult<PathBuf> {
+    let entry = codec.open(path)?;
+    let Some(front_matter) = entry.front_matter.as_deref() else {
+        bail!("entry has no front matter; its date cannot be changed");
+    };
+    let mut parsed =
+        crate::markdown::parse_front_matter(front_matter).map_err(anyhow::Error::new)?;
+    let Some(from) = parsed
+        .datetime
+        .created_at
+        .clone()
+        .and_then(|raw| Timestamp::parse(raw).parsed)
+    else {
+        bail!("entry has no creation date to change");
+    };
+    let to = from.with().date(date).build()?;
+    parsed.datetime.created_at = Some(crate::storage::to_offset_rfc3339(&to));
+    parsed.datetime.edited_at = Some(crate::storage::to_offset_rfc3339(&Zoned::now()));
+
+    let Some(target) = redated_path(root, path, &from, &to).filter(|target| target != path) else {
+        codec.write_existing(path, &crate::markdown::render_entry(&parsed, &entry.body))?;
+        return Ok(path.to_path_buf());
+    };
+    let assets = entry_assets_dir(path)
+        .filter(|dir| dir.exists())
+        .zip(entry_assets_dir(&target));
+    for (what, taken) in [
+        ("entry", Some(target.clone())),
+        (
+            "asset folder",
+            assets.as_ref().map(|(_, dest)| dest.clone()),
+        ),
+    ] {
+        if let Some(taken) = taken.filter(|taken| taken.exists()) {
+            return Err(StorageError::TargetExists { what, path: taken }.into());
+        }
+    }
+
+    let body = match (entry_assets_dir_name(path), entry_assets_dir_name(&target)) {
+        (Some(source), Some(dest)) => {
+            super::assets::retarget_stored_asset_links(&entry.body, &source, &dest)
+        }
+        _ => entry.body,
+    };
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    codec.write_existing(&target, &crate::markdown::render_entry(&parsed, &body))?;
+    if let Some((source, dest)) = assets
+        && let Err(error) = fs::rename(source, dest)
+    {
+        let _ = fs::remove_file(&target);
+        prune_empty_date_dirs(root, &target);
+        return Err(error.into());
+    }
+    fs::remove_file(path)?;
+    prune_empty_date_dirs(root, path);
+    Ok(target)
+}
+
+/// Where an entry filed for `from` belongs once dated `to`: the same journal's
+/// day folder for `to`, with the date at the front of the file name swapped.
+/// `None` when the entry isn't filed under its own date.
+fn redated_path(root: &Path, path: &Path, from: &Zoned, to: &Zoned) -> Option<PathBuf> {
+    let journal = path.parent()?.parent()?.parent()?.parent()?;
+    if journal.parent()? != root || path.parent()? != day_dir(journal, from) {
+        return None;
+    }
+    let name = path.file_name()?.to_str()?;
+    let name = match name.strip_prefix(&from.strftime("%Y-%m-%d").to_string()) {
+        Some(rest) => format!("{}{rest}", to.strftime("%Y-%m-%d")),
+        None => name.to_string(),
+    };
+    Some(day_dir(journal, to).join(name))
+}
+
+fn day_dir(journal: &Path, date: &Zoned) -> PathBuf {
+    journal
+        .join(date.strftime("%Y").to_string())
+        .join(date.strftime("%m").to_string())
+        .join(date.strftime("%d").to_string())
 }
 
 pub(crate) fn delete_empty_entry(root: &Path, path: &Path) -> AppResult<()> {

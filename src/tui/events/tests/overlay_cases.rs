@@ -1823,3 +1823,125 @@ fn ollama_empty_list_replaces_local_or_keeps_the_saved_name() {
     }
     assert_eq!(app.model_setup_state().unwrap().selected_index(), Some(1));
 }
+
+// ── Entry date ───────────────────────────────────────────────────────────────
+
+/// An app over `work` entries filed the way the app files them, one per
+/// `(created_at, id)`, with the newest selected.
+fn app_with_dated_entries(entries: &[(&str, &str)]) -> AppModel {
+    let entries: Vec<(String, String)> = entries
+        .iter()
+        .map(|(created, id)| (created.to_string(), id.to_string()))
+        .collect();
+    let mut app = crate::tui::test_support::app_in_temp(move |root| {
+        for (created, id) in &entries {
+            let (date, time) = created.split_once('T').unwrap();
+            let mut parts = date.split('-');
+            let dir = root
+                .join("work")
+                .join(parts.next().unwrap())
+                .join(parts.next().unwrap())
+                .join(parts.next().unwrap());
+            fs::create_dir_all(&dir).unwrap();
+            let stamp = format!("{date}T{}", time[..8].replace(':', "-"));
+            fs::write(
+                dir.join(format!("{stamp}-{id}.md")),
+                format!(
+                    "+++\nschema_version = 1\n[time]\ncreated_at = \"{created}\"\n+++\n\n# {id}\n"
+                ),
+            )
+            .unwrap();
+        }
+    });
+    app.select_journal_by_name("work");
+    app.select_entry_index(0);
+    app
+}
+
+fn press_keys(app: &mut AppModel, keys: &[KeyCode]) {
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 30)).unwrap();
+    for code in keys {
+        if let Some(action) = keyboard::key_to_action(app, key(*code), true) {
+            dispatch_action(&mut terminal, app, action).unwrap();
+        }
+    }
+}
+
+#[test]
+fn changing_an_entry_date_moves_it_and_keeps_it_open() {
+    let mut app = app_with_dated_entries(&[
+        ("2025-03-08T21:15:00+01:00", "sat0"),
+        ("2025-03-07T12:00:00+01:00", "fri0"),
+    ]);
+    app.nav.focus = Focus::Reader;
+
+    press_keys(
+        &mut app,
+        &[KeyCode::Char('t'), KeyCode::Left, KeyCode::Left],
+    );
+    let state = app.edit_date_state().expect("date dialog open");
+    assert_eq!(state.draft, jiff::civil::date(2025, 3, 6));
+    press_keys(&mut app, &[KeyCode::Enter]);
+
+    assert!(matches!(app.overlay, Overlay::None));
+    assert_eq!(app.nav.focus, Focus::Reader);
+    let entry = app.resolved_selected_entry().unwrap();
+    assert_eq!(entry.id, "2025-03-06T21-15-00-sat0");
+    assert_eq!(entry.created_raw(), Some("2025-03-06T21:15:00+01:00"));
+    assert_eq!(
+        app.nav.selected_entry_index,
+        Some(1),
+        "now sorts after Friday"
+    );
+    assert!(
+        entry
+            .path
+            .ends_with("work/2025/03/06/2025-03-06T21-15-00-sat0.md")
+    );
+}
+
+#[test]
+fn entry_date_cannot_move_past_today_and_esc_discards() {
+    let now = jiff::Zoned::now();
+    let created = now.strftime("%Y-%m-%dT%H:%M:%S%:z").to_string();
+    let mut app = app_with_dated_entries(&[(created.as_str(), "now0")]);
+    let path = app.resolved_selected_entry().unwrap().path.clone();
+
+    press_keys(
+        &mut app,
+        &[KeyCode::Char('t'), KeyCode::Right, KeyCode::Down],
+    );
+    assert_eq!(app.edit_date_state().unwrap().draft, now.date());
+
+    press_keys(&mut app, &[KeyCode::Up, KeyCode::Esc]);
+    assert!(matches!(app.overlay, Overlay::None));
+    assert_eq!(app.resolved_selected_entry().unwrap().path, path);
+}
+
+#[test]
+fn date_dialog_hints_map_to_their_actions() {
+    let mut app = app_with_dated_entries(&[("2025-03-08T21:15:00+01:00", "sat0")]);
+    assert_eq!(
+        mouse::hint_id_to_action(&app, render::HintId::EditDate),
+        Some(Action::Metadata(MetadataAction::BeginDate))
+    );
+    app.begin_edit_date();
+    for (hint, action) in [
+        (
+            render::HintId::DateEarlier,
+            Some(MetadataAction::AdjustDate(-1)),
+        ),
+        (
+            render::HintId::DateLater,
+            Some(MetadataAction::AdjustDate(1)),
+        ),
+        (render::HintId::DateWeek, None),
+        (render::HintId::DateSave, Some(MetadataAction::DateSave)),
+    ] {
+        assert_eq!(
+            mouse::hint_id_to_action(&app, hint),
+            action.map(Action::Metadata),
+            "{hint:?}"
+        );
+    }
+}

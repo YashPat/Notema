@@ -14,7 +14,9 @@ use crate::tui::features::{
     location::{EditLocationFocus, EditLocationState, LocationResolveStatus},
     metadata::{EditMetadataFocus, EditMetadataState},
 };
-use crate::tui::state::{DeleteContext, EditMoodState, HoverTarget, ListNav, ThemePickerState};
+use crate::tui::state::{
+    DeleteContext, EditDateState, EditMoodState, HoverTarget, ListNav, ThemePickerState,
+};
 use crate::tui::surface::{metadata_value_rows, surface_outer_width};
 use crate::tui::text_input::TextInput;
 use crate::tui::theme::Theme;
@@ -49,9 +51,9 @@ pub(crate) use model_setup::{model_setup_fields, model_setup_hints, model_setup_
 mod overlays;
 pub(crate) use overlays::{confirm_delete_inner, new_journal_field_rect};
 pub(super) use overlays::{
-    draw_confirm_delete, draw_edit_feelings_dialog, draw_edit_location_dialog,
-    draw_edit_metadata_dialog, draw_edit_mood_dialog, draw_fetching_environment,
-    draw_new_journal_input,
+    draw_confirm_delete, draw_edit_date_dialog, draw_edit_feelings_dialog,
+    draw_edit_location_dialog, draw_edit_metadata_dialog, draw_edit_mood_dialog,
+    draw_fetching_environment, draw_new_journal_input,
 };
 
 // ── Hint text constants and helpers ──────────────────────────────────────────
@@ -97,6 +99,14 @@ const MOOD_DIALOG_HINTS: [Hint; 5] = [
     Hint::new("increase", "→", HintId::MoodIncrease),
     Hint::new("save", "enter", HintId::MoodSave),
     Hint::new("clear", "del", HintId::MoodClear),
+    Hint::new("cancel", "esc", HintId::CancelOverlay),
+];
+
+const DATE_DIALOG_HINTS: [Hint; 5] = [
+    Hint::new("day earlier", "←", HintId::DateEarlier),
+    Hint::new("day later", "→", HintId::DateLater),
+    Hint::new("week", "↑↓", HintId::DateWeek),
+    Hint::new("save", "enter", HintId::DateSave),
     Hint::new("cancel", "esc", HintId::CancelOverlay),
 ];
 
@@ -205,6 +215,7 @@ pub(crate) fn location_list_row_at(
     None
 }
 const MOOD_DIALOG_WIDTH: u16 = 90;
+const DATE_DIALOG_WIDTH: u16 = 60;
 const CONFIRM_DIALOG_WIDTH: u16 = 42;
 const NEW_JOURNAL_DIALOG_WIDTH: u16 = 56;
 const METADATA_DIALOG_MAX_VISIBLE_ROWS: u16 = 14;
@@ -220,6 +231,10 @@ pub(crate) fn feelings_dialog_hints(focus: EditMetadataFocus) -> &'static [Hint]
 
 pub(crate) fn mood_dialog_hints() -> &'static [Hint] {
     &MOOD_DIALOG_HINTS
+}
+
+pub(crate) fn date_dialog_hints() -> &'static [Hint] {
+    &DATE_DIALOG_HINTS
 }
 
 pub(crate) fn location_dialog_hints(
@@ -541,6 +556,67 @@ pub(crate) fn mood_dialog_layout(theme: &Theme, frame_area: Rect) -> MoodDialogL
         value: value_chunks[1],
         hints: dialog_hints_rect(inner, hint_height),
     }
+}
+
+pub(crate) struct DateDialogLayout {
+    pub(crate) area: Rect,
+    pub(crate) date: Rect,
+    pub(crate) note: Rect,
+    pub(crate) hints: Rect,
+}
+
+/// A blank row, the date, the change against the saved date, a blank row, then
+/// the hints.
+pub(crate) fn date_dialog_layout(theme: &Theme, frame_area: Rect) -> DateDialogLayout {
+    let hint_rows = hint_height(
+        &DATE_DIALOG_HINTS,
+        dialog_hint_width(theme, frame_area, DATE_DIALOG_WIDTH),
+    );
+    let h = 4 + dialog_frame_rows(theme) + hint_rows;
+    let area = super::centered_rect_fixed_size(
+        DATE_DIALOG_WIDTH,
+        h.min(frame_area.height.saturating_sub(2)),
+        frame_area,
+    );
+    let inner = dialog_content_full(theme, area);
+    DateDialogLayout {
+        area,
+        date: dialog_row(inner, 1),
+        note: dialog_row(inner, 2),
+        hints: dialog_hints_rect(inner, hint_rows),
+    }
+}
+
+/// The draft date in full, between the arrows that can still move it. Today has
+/// no later arrow, since an entry can't be dated in the future.
+fn date_dialog_heading(draft: jiff::civil::Date, today: jiff::civil::Date) -> String {
+    let date = draft.strftime("%A, %-d %B %Y");
+    let suffix = if draft == today {
+        " · today"
+    } else if draft.tomorrow().is_ok_and(|next| next == today) {
+        " · yesterday"
+    } else {
+        ""
+    };
+    let later = if draft < today { "›" } else { " " };
+    format!("‹  {date}{suffix}  {later}")
+}
+
+fn date_dialog_note(state: &EditDateState) -> String {
+    let days = state
+        .draft
+        .since(state.saved)
+        .map_or(0, |span| span.get_days());
+    if days == 0 {
+        return "No change".to_string();
+    }
+    let unit = if days.abs() == 1 { "day" } else { "days" };
+    let direction = if days < 0 { "earlier" } else { "later" };
+    format!(
+        "{} {unit} {direction} than {}",
+        days.abs(),
+        state.saved.strftime("%a %-d %b")
+    )
 }
 
 // ── Shared render helpers ─────────────────────────────────────────────────────

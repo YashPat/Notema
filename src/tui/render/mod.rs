@@ -67,10 +67,10 @@ pub(crate) use dialogs::{
     mood_dialog_layout, theme_picker_hints,
 };
 use dialogs::{
-    draw_confirm_delete, draw_edit_feelings_dialog, draw_edit_location_dialog,
-    draw_edit_metadata_dialog, draw_edit_mood_dialog, draw_fetching_environment,
-    draw_filter_dialog, draw_model_setup, draw_new_journal_input, draw_settings_dialog,
-    draw_theme_picker,
+    draw_confirm_delete, draw_edit_date_dialog, draw_edit_feelings_dialog,
+    draw_edit_location_dialog, draw_edit_metadata_dialog, draw_edit_mood_dialog,
+    draw_fetching_environment, draw_filter_dialog, draw_model_setup, draw_new_journal_input,
+    draw_settings_dialog, draw_theme_picker,
 };
 pub(crate) use dialogs::{
     feelings_dialog_layout, filter_dialog_layout, location_dialog_layout, metadata_dialog_layout,
@@ -539,6 +539,10 @@ fn register_overlay_interactions(
                 InteractionKind::DialogInput(DialogInputId::Feelings),
             );
         }
+        Overlay::EditDate(_) => {
+            let layout = dialogs::date_dialog_layout(context.theme, frame_area);
+            register_hint_regions(context, layout.hints, dialogs::date_dialog_hints());
+        }
         Overlay::EditMood(_) => {
             let layout = dialogs::mood_dialog_layout(context.theme, frame_area);
             context
@@ -984,6 +988,10 @@ fn draw_overlays(theme: &crate::tui::theme::Theme, frame: &mut Frame<'_>, app: &
 
     if let Some(state) = app.edit_mood_state() {
         draw_edit_mood_dialog(theme, frame, state, hover);
+    }
+
+    if let Some(state) = app.edit_date_state() {
+        draw_edit_date_dialog(theme, frame, state, hover);
     }
 
     if let Some(state) = app.filter_state_mut() {

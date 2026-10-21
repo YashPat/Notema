@@ -217,6 +217,10 @@ pub(crate) enum MetadataAction {
     AdjustMood(i8),
     MoodSave,
     MoodClear,
+    BeginDate,
+    /// Move the draft date by this many days.
+    AdjustDate(i32),
+    DateSave,
 }
 
 #[derive(Debug, PartialEq)]

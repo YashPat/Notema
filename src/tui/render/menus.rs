@@ -153,6 +153,7 @@ const HELP_SECTIONS: [(&str, &[(&str, &str)]); 6] = [
             ("f", "Feelings"),
             ("m", "Mood"),
             ("l", "Location"),
+            ("t", "Date"),
             ("ctrl+g", "Metadata menu"),
         ],
     ),

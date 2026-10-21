@@ -317,6 +317,29 @@ pub(super) fn metadata<B: Backend>(
                 |app| set_mood_on_entry(app, Some(mood)),
             )?;
         }
+        MetadataAction::BeginDate => app.begin_edit_date(),
+        MetadataAction::AdjustDate(days) => {
+            if let Some(state) = app.edit_date_state_mut() {
+                state.draft = shift_date(state.draft, days);
+            }
+        }
+        MetadataAction::DateSave => {
+            let Some((saved, draft)) = app
+                .edit_date_state()
+                .map(|state| (state.saved, state.draft))
+            else {
+                return Ok(None);
+            };
+            if draft != saved {
+                let mut snapshot = ReaderSnapshot::capture(app);
+                let moved = set_date_on_entry(app, draft)?;
+                if let (Some(snapshot), Some(id)) = (snapshot.as_mut(), moved) {
+                    snapshot.id = id;
+                }
+                restore_reader_or_close(app, snapshot);
+            }
+            app.close_overlay();
+        }
         MetadataAction::MoodClear => {
             let saved = app.edit_mood_state().and_then(|state| state.saved);
             edit_or_commit(
@@ -332,6 +355,15 @@ pub(super) fn metadata<B: Backend>(
         }
     }
     Ok(None)
+}
+
+/// `date` moved by `days`, never past today: an entry can't be written in the
+/// future.
+fn shift_date(date: jiff::civil::Date, days: i32) -> jiff::civil::Date {
+    let today = jiff::Zoned::now().date();
+    date.checked_add(jiff::Span::new().days(days))
+        .unwrap_or(date)
+        .min(today)
 }
 
 pub(super) fn location(

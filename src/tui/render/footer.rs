@@ -40,6 +40,11 @@ pub(crate) enum HintId {
     MoodIncrease,
     MoodSave,
     MoodClear,
+    DateEarlier,
+    DateLater,
+    /// Step the date a week (↑ / ↓). Inert, like [`Self::SettingsAdjust`].
+    DateWeek,
+    DateSave,
     LocationSwitchFocus,
     LocationResolve,
     LocationGrabDevice,
@@ -59,6 +64,7 @@ pub(crate) enum HintId {
     EditFeelings,
     EditMood,
     EditLocation,
+    EditDate,
     ThemePickerApply,
     ThemePickerRevert,
     ThemePickerChrome,
@@ -600,6 +606,7 @@ fn selected_entry_action_hints() -> Vec<Hint> {
         Hint::new("feelings", "f", HintId::EditFeelings),
         Hint::new("mood", "m", HintId::EditMood),
         Hint::new("location", "l", HintId::EditLocation),
+        Hint::new("date", "t", HintId::EditDate),
         Hint::new("star", "s", HintId::ToggleStarred),
         Hint::new("del", "d", HintId::BeginDelete),
     ]

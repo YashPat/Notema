@@ -1183,6 +1183,11 @@ impl JournalStore {
         storage::move_entry_to_trash(&self.paths.journal_root, entry_path)
     }
 
+    /// Move an entry to `date`, keeping its time of day. Returns its new path.
+    pub fn redate_entry(&self, path: &Path, date: jiff::civil::Date) -> AppResult<PathBuf> {
+        storage::redate_entry(&self.entry_codec(), &self.paths.journal_root, path, date)
+    }
+
     pub fn delete_empty_entry(&self, path: &Path) -> AppResult<()> {
         storage::delete_empty_entry(&self.paths.journal_root, path)
     }

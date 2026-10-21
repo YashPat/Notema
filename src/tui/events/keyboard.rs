@@ -266,6 +266,7 @@ pub(super) fn key_to_action(
         Overlay::EditMetadata(_) => tags_key_to_action(app, key),
         Overlay::EditFeelings(_) => feelings_key_to_action(app, key),
         Overlay::EditMood(_) => mood_key_to_action(key),
+        Overlay::EditDate(_) => date_key_to_action(key),
         Overlay::Filter(_) => filter_key_to_action(key),
         Overlay::EditLocation(_) => location_key_to_action(app, key),
         Overlay::ImageViewer(_) => image_viewer_key_to_action(key),
@@ -548,6 +549,9 @@ fn browse_key_to_action(app: &AppModel, key: KeyEvent, reader_available: bool) -
         KeyCode::Char('l') if app.can_act_on_selected_entry() => {
             Some(Action::Location(LocationAction::BeginEdit))
         }
+        KeyCode::Char('t') if app.can_act_on_selected_entry() => {
+            Some(Action::Metadata(MetadataAction::BeginDate))
+        }
         KeyCode::Char('s') if app.can_act_on_selected_entry() => {
             Some(Action::Browser(BrowserAction::ToggleStarred))
         }
@@ -601,6 +605,7 @@ fn reader_key_to_action(app: &AppModel, key: KeyEvent) -> Option<Action> {
         KeyCode::Char('f') => Some(Action::Metadata(MetadataAction::BeginFeelings)),
         KeyCode::Char('m') => Some(Action::Metadata(MetadataAction::BeginMood)),
         KeyCode::Char('l') => Some(Action::Location(LocationAction::BeginEdit)),
+        KeyCode::Char('t') => Some(Action::Metadata(MetadataAction::BeginDate)),
         KeyCode::Char('s') => Some(Action::Browser(BrowserAction::ToggleStarred)),
         KeyCode::Char('i') if app.selected_entry_image_count() > 0 => {
             Some(Action::Images(ImageAction::OpenViewer(0)))
@@ -854,6 +859,20 @@ fn mood_key_to_action(key: KeyEvent) -> Option<Action> {
         KeyCode::Right => Some(Action::Metadata(MetadataAction::AdjustMood(1))),
         _ => None,
     }
+}
+
+/// Left/Right step a day, Up/Down a week.
+fn date_key_to_action(key: KeyEvent) -> Option<Action> {
+    let days = match key.code {
+        KeyCode::Esc => return Some(Action::Overlay(OverlayAction::Cancel)),
+        KeyCode::Enter => return Some(Action::Metadata(MetadataAction::DateSave)),
+        KeyCode::Left => -1,
+        KeyCode::Right => 1,
+        KeyCode::Up => -7,
+        KeyCode::Down => 7,
+        _ => return None,
+    };
+    Some(Action::Metadata(MetadataAction::AdjustDate(days)))
 }
 
 fn location_key_to_action(app: &AppModel, key: KeyEvent) -> Option<Action> {

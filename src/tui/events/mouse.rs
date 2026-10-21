@@ -1109,6 +1109,10 @@ pub(super) fn hint_id_to_action(app: &AppModel, id: render::HintId) -> Option<Ac
         render::HintId::MoodIncrease => Some(Action::Metadata(MetadataAction::AdjustMood(1))),
         render::HintId::MoodSave => Some(Action::Metadata(MetadataAction::MoodSave)),
         render::HintId::MoodClear => Some(Action::Metadata(MetadataAction::MoodClear)),
+        render::HintId::DateEarlier => Some(Action::Metadata(MetadataAction::AdjustDate(-1))),
+        render::HintId::DateLater => Some(Action::Metadata(MetadataAction::AdjustDate(1))),
+        render::HintId::DateWeek => None,
+        render::HintId::DateSave => Some(Action::Metadata(MetadataAction::DateSave)),
         render::HintId::LocationSwitchFocus => Some(Action::Location(LocationAction::SwitchFocus)),
         render::HintId::LocationResolve => Some(Action::Location(LocationAction::Resolve)),
         render::HintId::LocationGrabDevice => Some(Action::Location(LocationAction::GrabDevice)),
@@ -1140,6 +1144,9 @@ pub(super) fn hint_id_to_action(app: &AppModel, id: render::HintId) -> Option<Ac
         }
         render::HintId::EditLocation if app.can_act_on_selected_entry() => {
             Some(Action::Location(LocationAction::BeginEdit))
+        }
+        render::HintId::EditDate if app.can_act_on_selected_entry() => {
+            Some(Action::Metadata(MetadataAction::BeginDate))
         }
         render::HintId::ToggleStarred if app.can_act_on_selected_entry() => {
             Some(Action::Browser(BrowserAction::ToggleStarred))

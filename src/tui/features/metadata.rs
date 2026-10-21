@@ -6,7 +6,7 @@ use crate::tui::state::{ListNav, SelectableList};
 use crate::tui::{
     app::AppModel,
     features::search::quote_filter_value,
-    state::{EditMoodState, MetadataKind, Overlay},
+    state::{EditDateState, EditMoodState, MetadataKind, Overlay, ToastVariant},
     text_input::TextInput,
 };
 
@@ -157,6 +157,38 @@ impl AppModel {
     pub(crate) fn edit_mood_state_mut(&mut self) -> Option<&mut EditMoodState> {
         match &mut self.overlay {
             Overlay::EditMood(state) => Some(state),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn begin_edit_date(&mut self) {
+        if self.editor.is_some() || !self.allow_selected_entry_edit() {
+            return;
+        }
+        let Some(saved) = self
+            .resolved_selected_entry()
+            .and_then(|entry| entry.created_time())
+            .map(|created| created.date())
+        else {
+            self.toast(ToastVariant::Error, "This entry has no date to change");
+            return;
+        };
+        self.overlay = Overlay::EditDate(EditDateState {
+            saved,
+            draft: saved,
+        });
+    }
+
+    pub(crate) fn edit_date_state(&self) -> Option<&EditDateState> {
+        match &self.overlay {
+            Overlay::EditDate(state) => Some(state),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn edit_date_state_mut(&mut self) -> Option<&mut EditDateState> {
+        match &mut self.overlay {
+            Overlay::EditDate(state) => Some(state),
             _ => None,
         }
     }

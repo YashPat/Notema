@@ -24,8 +24,9 @@ pub(crate) use action::{
 };
 use actions::{
     delete_selected, delete_selected_journal, open_reader_link, save_internal_editor,
-    set_feelings_on_entry, set_location_on_entry, set_metadata_on_entry, set_mood_on_entry,
-    submit_new_journal, toggle_archive_selected_journal, toggle_starred_on_entry, view_selected,
+    set_date_on_entry, set_feelings_on_entry, set_location_on_entry, set_metadata_on_entry,
+    set_mood_on_entry, submit_new_journal, toggle_archive_selected_journal,
+    toggle_starred_on_entry, view_selected,
 };
 pub(crate) use keyboard::{handle_key, handle_paste};
 pub(crate) use mouse::{fold_leading_wheel, handle_mouse, handle_scroll, is_wheel, update_hover};

@@ -1244,3 +1244,105 @@ fn assets_dirs_under(root: &Path) -> Vec<PathBuf> {
     found.sort();
     found
 }
+
+fn write_dated_entry(root: &Path, created: &Zoned, body: &str) -> PathBuf {
+    let path = entry_path_with_id(root, "work", created, "abcd");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        &path,
+        format!(
+            "+++\nschema_version = 1\n\n[time]\ncreated_at = \"{}\"\n+++\n\n{body}\n",
+            crate::storage::to_offset_rfc3339(created)
+        ),
+    )
+    .unwrap();
+    path
+}
+
+#[test]
+fn redate_entry_moves_it_to_the_new_day_with_its_time_and_assets() {
+    let dir = tempdir().unwrap();
+    let created = jiff::civil::date(2026, 10, 17)
+        .at(21, 15, 0, 0)
+        .to_zoned(jiff::tz::TimeZone::fixed(jiff::tz::offset(2)))
+        .unwrap();
+    let path = write_dated_entry(
+        dir.path(),
+        &created,
+        "![x](2026-10-17T21-15-00-abcd.assets/x.png)",
+    );
+    let assets = super::paths::entry_assets_dir(&path).unwrap();
+    fs::create_dir_all(&assets).unwrap();
+    fs::write(assets.join("x.png"), b"img").unwrap();
+
+    let moved = redate_entry(
+        &EntryCodec::plain(),
+        dir.path(),
+        &path,
+        jiff::civil::date(2026, 10, 15),
+    )
+    .unwrap();
+
+    assert_eq!(
+        moved,
+        dir.path()
+            .join("work/2026/10/15/2026-10-15T21-15-00-abcd.md")
+    );
+    let content = fs::read_to_string(&moved).unwrap();
+    assert!(content.contains("created_at = \"2026-10-15T21:15:00+02:00\""));
+    assert!(content.contains("![x](2026-10-15T21-15-00-abcd.assets/x.png)"));
+    assert!(content.contains("edited_at"));
+    assert_eq!(
+        fs::read(
+            dir.path()
+                .join("work/2026/10/15/2026-10-15T21-15-00-abcd.assets/x.png")
+        )
+        .unwrap(),
+        b"img"
+    );
+    assert!(!dir.path().join("work/2026/10/17").exists());
+}
+
+#[test]
+fn redate_entry_rewrites_only_the_date_of_an_entry_filed_elsewhere() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("work").join("loose.md");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        &path,
+        "+++\nschema_version = 1\n\n[time]\ncreated_at = \"2026-10-17T08:00:00Z\"\n+++\n\nBody\n",
+    )
+    .unwrap();
+
+    let moved = redate_entry(
+        &EntryCodec::plain(),
+        dir.path(),
+        &path,
+        jiff::civil::date(2026, 9, 30),
+    )
+    .unwrap();
+
+    assert_eq!(moved, path);
+    let content = fs::read_to_string(&path).unwrap();
+    assert!(content.contains("created_at = \"2026-09-30T08:00:00+00:00\""));
+    assert!(content.contains("Body"));
+}
+
+#[test]
+fn redate_entry_refuses_to_overwrite_an_entry_on_the_new_day() {
+    let dir = tempdir().unwrap();
+    let path = write_dated_entry(dir.path(), &local_time(2026, 10, 17, 9, 0), "Mine");
+    let other = write_dated_entry(dir.path(), &local_time(2026, 10, 16, 9, 0), "Other");
+
+    let error = redate_entry(
+        &EntryCodec::plain(),
+        dir.path(),
+        &path,
+        jiff::civil::date(2026, 10, 16),
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("already exists"));
+    assert!(fs::read_to_string(&path).unwrap().contains("Mine"));
+    assert!(fs::read_to_string(&other).unwrap().contains("Other"));
+}

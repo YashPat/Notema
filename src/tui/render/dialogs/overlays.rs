@@ -290,6 +290,31 @@ pub(in crate::tui::render) fn draw_edit_mood_dialog(
     }
 }
 
+pub(in crate::tui::render) fn draw_edit_date_dialog(
+    theme: &Theme,
+    frame: &mut Frame<'_>,
+    state: &EditDateState,
+    hover: HoverTarget,
+) {
+    let layout = date_dialog_layout(theme, frame.area());
+    draw_dialog_frame(theme, frame, layout.area, "Entry Date", true);
+    let today = jiff::Zoned::now().date();
+    frame.render_widget(
+        Paragraph::new(Span::styled(
+            date_dialog_heading(state.draft, today),
+            theme.heading(),
+        ))
+        .alignment(Alignment::Center),
+        layout.date,
+    );
+    frame.render_widget(
+        Paragraph::new(Span::styled(date_dialog_note(state), theme.muted()))
+            .alignment(Alignment::Center),
+        layout.note,
+    );
+    render_hint_line(theme, frame, date_dialog_hints(), layout.hints, hover);
+}
+
 pub(in crate::tui::render) fn draw_edit_location_dialog(
     theme: &Theme,
     frame: &mut Frame<'_>,

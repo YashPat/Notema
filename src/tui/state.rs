@@ -759,6 +759,13 @@ pub(crate) struct EditMoodState {
     pub(crate) draft: i8,
 }
 
+/// State for the entry-date overlay.
+pub(crate) struct EditDateState {
+    /// The date the entry is saved under.
+    pub(crate) saved: jiff::civil::Date,
+    pub(crate) draft: jiff::civil::Date,
+}
+
 /// Fullscreen image viewer overlay: the entry's images in body order and the
 /// one currently shown.
 pub(crate) struct ImageViewerState {
@@ -812,6 +819,7 @@ pub(crate) enum Overlay {
     EditMetadata(Box<EditMetadataState>),
     EditFeelings(Box<EditFeelingState>),
     EditMood(EditMoodState),
+    EditDate(EditDateState),
     /// The filter browser: a tabbed list of every tag/person/activity/feeling/
     /// place value with post counts, launching a search on the chosen
     /// row. Boxed — it caches all five tabs' value lists.

@@ -589,6 +589,32 @@ pub(super) fn set_mood_on_entry(app: &mut AppModel, mood: Option<i8>) -> AppResu
     Ok(())
 }
 
+/// Move the selected entry to `date`. Returns its id afterwards, which changes
+/// when the file moves to the new day's folder.
+pub(super) fn set_date_on_entry(
+    app: &mut AppModel,
+    date: jiff::civil::Date,
+) -> AppResult<Option<String>> {
+    let Some(target) = app.selected_entry_target() else {
+        return Ok(None);
+    };
+
+    if !reject_if_locked(app, &target) {
+        return Ok(None);
+    }
+    if !reject_if_front_matter_invalid(app) {
+        return Ok(None);
+    }
+
+    let moved = app.services.store.redate_entry(&target.path, date)?;
+    app.refresh_paths(&[target.path, moved.clone()])?;
+    app.toast(
+        ToastVariant::Success,
+        format!("Moved to {}", date.strftime("%A, %-d %B %Y")),
+    );
+    Ok(notema_storage::entry_id(&moved))
+}
+
 pub(super) fn set_location_on_entry(
     app: &mut AppModel,
     location: Option<Location>,
