@@ -1,16 +1,9 @@
 ---
 name: rust-skills
-description: >
-  Comprehensive Rust coding guidelines with 265 rules across 26 categories.
-  Use when writing, reviewing, or refactoring Rust code. Covers ownership,
-  error handling, async patterns, concurrency, unsafe code, API design, memory
-  optimization, performance, numeric safety, conversions, serde, pattern
-  matching, macros, closures, observability, testing, and common anti-patterns.
-  Invoke with /rust-skills.
-license: MIT
+description: Comprehensive Rust coding guidelines with 265 rules across 26 categories. Use when writing, reviewing, or refactoring Rust code. Covers ownership, error handling, async patterns, concurrency, unsafe code, API design, memory optimization, performance, numeric safety, conversions, serde, pattern matching, macros, closures, observability, testing, and common anti-patterns. Invoke with /rust-skills.
 metadata:
   author: leonardomso
-  version: "1.5.1"
+  version: 1.5.1
   sources:
     - Rust API Guidelines
     - Rust Performance Book
@@ -18,7 +11,6 @@ metadata:
     - The Rustonomicon
     - ripgrep, tokio, serde, polars, axum, cargo codebases
 ---
-
 # Rust Best Practices
 
 Comprehensive guide for writing high-quality, idiomatic, and highly optimized Rust code. Contains 265 rules across 26 categories, prioritized by impact to guide LLMs in code generation and refactoring. Current for Rust 1.96 (2024 edition).
